@@ -2328,7 +2328,28 @@ function openOrderEdit(id) {
       try {
         const wb = XLSX.read(e.target.result, {type:'array', codepage:1251});
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        
+        // Read as array with raw:false to get formatted values, dense:false for sparse
+        const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:false});
+        // Also get raw rows for numbers
+        const rowsRaw = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:true});
+        
+        // Debug: check actual cell addresses
+        const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+        console.log('Sheet range:', ws['!ref'], 'max col:', range.e.c, 'max row:', range.e.r);
+        
+        // Build cell map by address for reliable access
+        const cellMap = {}; // {row: {col: value}}
+        Object.keys(ws).forEach(addr => {
+          if (addr.startsWith('!')) return;
+          const cell = XLSX.utils.decode_cell(addr);
+          if (!cellMap[cell.r]) cellMap[cell.r] = {};
+          cellMap[cell.r][cell.c] = ws[addr].v !== undefined ? ws[addr].v : (ws[addr].w || '');
+        });
+        
+        console.log('XLS rows count:', rows.length, 'cellMap rows:', Object.keys(cellMap).length);
+        console.log('First 3 rows (array):', rows.slice(0,3).map(r=>r.slice(0,8)));
+        
         const codeRe = /^[ВМ][0-9]{8,}/i;
         let newItems = [], notFound = [];
 
@@ -2360,15 +2381,20 @@ function openOrderEdit(id) {
           }
           console.log('1C columns detected: name='+colName+' qty='+colQty+' price='+colPrice+' headerRow='+headerRow);
 
-          // Парсим строки с данными (после заголовка)
+          // Парсим строки с данными через cellMap (надёжнее для XLS с объединёнными ячейками)
           const dataStart = headerRow !== null ? headerRow + 1 : 6;
-          rows.forEach((row, ri) => {
-            if (ri < dataStart) return;
-            const nameB = String(row[colName]||'').trim();
-            const qty = colQty >= 0 ? parseFloat(String(row[colQty]||'').replace(',','.')) : 0;
-            const price = colPrice >= 0 ? parseFloat(String(row[colPrice]||'').replace(',','.')) : 0;
-            if (!nameB || !(qty > 0) || nameB.length < 5) return;
-            if (!nameB.match(/[а-яА-Я]/) && !nameB.toLowerCase().includes('amp')) return;
+          const maxRow = Math.max(...Object.keys(cellMap).map(Number));
+          
+          for (let ri = dataStart; ri <= maxRow; ri++) {
+            const rowCells = cellMap[ri] || {};
+            const nameB = String(rowCells[colName] || '').trim();
+            const qtyRaw = colQty >= 0 ? rowCells[colQty] : undefined;
+            const priceRaw = colPrice >= 0 ? rowCells[colPrice] : undefined;
+            const qty = parseFloat(String(qtyRaw||'').replace(',','.'));
+            const price = parseFloat(String(priceRaw||'').replace(',','.'));
+            
+            if (!nameB || !(qty > 0) || nameB.length < 5) continue;
+            if (!nameB.match(/[а-яА-Я]/) && !nameB.toLowerCase().includes('amp')) continue;
 
             const nameLow = nameB.toLowerCase();
             const prod = PRODUCTS.find(p => {
@@ -2389,7 +2415,7 @@ function openOrderEdit(id) {
                 ctn:null, weight:0, cbm:0, dims:'', price_partner:finalPrice, price_1c:price>0?price:null});
               notFound.push(nameB.slice(0,40));
             }
-          });
+          }
         } else if (isPrais) {
           // === ПРАЙС-ЛИСТ: код в col B, qty в col O(14), цена в col D(3) ===
           rows.forEach(row => {
