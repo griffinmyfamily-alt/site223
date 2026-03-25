@@ -2385,6 +2385,13 @@ function openOrderEdit(id) {
           const dataStart = headerRow !== null ? headerRow + 1 : 6;
           const maxRow = Math.max(...Object.keys(cellMap).map(Number));
           
+          // Debug: show first data row
+          const firstDataRow = cellMap[dataStart] || {};
+          console.log('First data row cells:', firstDataRow);
+          console.log('Name cell (col '+colName+'):', firstDataRow[colName]);
+          console.log('Qty cell (col '+colQty+'):', firstDataRow[colQty]);
+          console.log('Price cell (col '+colPrice+'):', firstDataRow[colPrice]);
+          
           for (let ri = dataStart; ri <= maxRow; ri++) {
             const rowCells = cellMap[ri] || {};
             const nameB = String(rowCells[colName] || '').trim();
