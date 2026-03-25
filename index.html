@@ -197,7 +197,7 @@ tbody tr.row-not-full{background:rgba(255,68,68,0.05);}
 /* ===== ORDER DETAIL MODAL ===== */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s;}
 .modal-overlay.open{opacity:1;pointer-events:all;}
-.modal-detail{background:var(--surface);border:none;border-radius:20px;width:700px;max-width:95vw;max-height:90vh;overflow-y:auto;transform:translateY(24px) scale(0.97);transition:transform 0.25s cubic-bezier(.32,1.2,.5,1),opacity 0.2s;box-shadow:0 20px 60px rgba(0,0,0,0.15);}
+.modal-detail{background:var(--surface);border:none;border-radius:20px;width:960px;max-width:96vw;max-height:92vh;overflow-y:auto;transform:translateY(24px) scale(0.97);transition:transform 0.25s cubic-bezier(.32,1.2,.5,1),opacity 0.2s;box-shadow:0 20px 60px rgba(0,0,0,0.15);}
 .modal-overlay.open .modal-detail{transform:translateY(0) scale(1);}
 .modal-overlay.open .modal-detail{transform:translateY(0);}
 .modal-header{padding:20px 24px 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--surface);border-bottom:1px solid var(--border);padding-bottom:14px;z-index:5;}
@@ -2074,10 +2074,12 @@ async function openOrderModal(id) {
       }).join('')}
     </div>` : ''}
     `;
+  const hasHistory = order.changelog && order.changelog.length > 0;
   document.getElementById('modalActions').innerHTML = `
     <button class="btn btn-export btn-sm" onclick="printAdminOrderPDF('${order.id}')">📄 PDF</button>
     ${currentProfile?.role === 'admin' ? `
     <button class="btn btn-secondary btn-sm" onclick="openOrderEdit('${order.id}')">✏️ Редактировать</button>
+    ${hasHistory ? `<button class="btn btn-secondary btn-sm" style="border-color:var(--warning);color:var(--warning)" onclick="toggleOrderHistory('${order.id}')">🕐 История (${order.changelog.length})</button>` : ''}
     <button class="btn btn-secondary btn-sm" style="border-color:#2a4a8a;color:#7ab3e0" onclick="exportOrderTo1C(${JSON.stringify(order).replace(/"/g,'&quot;')})">📋 Выгрузка в 1С</button>
     ` : ''}
     <button class="btn btn-secondary btn-sm" onclick="closeOrderModal()">Закрыть</button>`;
@@ -2549,9 +2551,24 @@ async function saveOrderItems(id) {
   const totWeight = +editItems.reduce((s,i)=>s+(Number(i.weight)||0)*i.qty,0).toFixed(3);
   const totCBM = +editItems.reduce((s,i)=>s+(Number(i.cbm)||0)*i.qty,0).toFixed(5);
   const totSum = +editItems.reduce((s,i)=>s+(i.price_partner?i.price_partner*i.qty:0),0).toFixed(2);
+
+  // Save old version to changelog
+  const oldEntry = {
+    date: new Date().toISOString(),
+    items: JSON.parse(JSON.stringify(order.items || [])),
+    total_qty: order.total_qty,
+    total_boxes: order.total_boxes,
+    total_weight: order.total_weight,
+    total_sum: order.total_sum,
+  };
+  const changelog = [...(order.changelog || []), oldEntry];
+  // Keep last 10 versions
+  if (changelog.length > 10) changelog.splice(0, changelog.length - 10);
+
   const updates = {
     items: editItems, total_qty: totQty, total_boxes: totBoxes,
     total_weight: totWeight, total_cbm: totCBM, total_sum: totSum,
+    changelog,
     client_company: document.getElementById('edit_company')?.value.trim() || order.client_company,
     client_name: document.getElementById('edit_contact')?.value.trim() || order.client_name,
     client_phone: document.getElementById('edit_phone')?.value.trim() || order.client_phone,
@@ -2568,6 +2585,60 @@ async function saveOrderItems(id) {
   renderOrdersList();
   closeOrderModal();
   setTimeout(() => openOrderModal(id), 200);
+}
+
+function toggleOrderHistory(id) {
+  const existing = document.getElementById('orderHistorySection');
+  if (existing) { existing.remove(); return; }
+  const order = allOrdersCache.find(o => o.id === id);
+  if (!order || !order.changelog) return;
+  const log = order.changelog;
+  const html = log.map((entry, i) => {
+    const dt = new Date(entry.date).toLocaleString('ru');
+    const itemsHtml = (entry.items || []).map((item, idx) => {
+      const ctn = item.ctn;
+      const boxes = ctn ? Math.floor(item.qty/ctn) : null;
+      const rem = ctn ? item.qty%ctn : 0;
+      const boxStr = ctn ? (boxes>0 ? boxes+' кор'+(rem?' +'+rem+' шт':'') : 'неполн.') : '—';
+      const price = item.price_partner;
+      return '<tr>'
+        +'<td style="color:var(--muted);font-size:11px;padding:4px 8px">'+(idx+1)+'</td>'
+        +'<td style="font-size:12px;padding:4px 8px">'+item.name+'</td>'
+        +'<td style="text-align:right;padding:4px 8px">'+item.qty+'</td>'
+        +'<td style="text-align:right;padding:4px 8px;color:var(--muted)">'+(ctn||'—')+'</td>'
+        +'<td style="text-align:right;padding:4px 8px">'+boxStr+'</td>'
+        +(price ? '<td style="text-align:right;padding:4px 8px;color:var(--accent);font-weight:600">'+price.toLocaleString('ru')+' ₽</td>' : '<td style="text-align:right;padding:4px 8px;color:var(--muted)">—</td>')
+        +'</tr>';
+    }).join('');
+    return '<div style="margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">'
+      +'<div style="background:var(--surface2);padding:8px 12px;display:flex;justify-content:space-between;align-items:center">'
+        +'<span style="font-size:12px;font-weight:600">Версия '+(log.length-i)+' — до редактирования</span>'
+        +'<span style="font-size:11px;color:var(--muted)">'+dt+'</span>'
+      +'</div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+        +'<thead><tr style="background:var(--surface2)">'
+          +'<th style="padding:5px 8px;width:28px;font-size:9px;color:var(--muted);text-transform:uppercase">#</th>'
+          +'<th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--muted);text-transform:uppercase">Наименование</th>'
+          +'<th style="padding:5px 8px;text-align:right;font-size:9px;color:var(--muted);text-transform:uppercase">Кол-во</th>'
+          +'<th style="padding:5px 8px;text-align:right;font-size:9px;color:var(--muted);text-transform:uppercase">Шт/кор</th>'
+          +'<th style="padding:5px 8px;text-align:right;font-size:9px;color:var(--muted);text-transform:uppercase">Коробок</th>'
+          +'<th style="padding:5px 8px;text-align:right;font-size:9px;color:var(--muted);text-transform:uppercase">Цена</th>'
+        +'</tr></thead>'
+        +'<tbody>'+itemsHtml+'</tbody>'
+      +'</table></div>'
+      +'<div style="padding:6px 12px;font-size:11px;color:var(--muted);border-top:1px solid var(--border)">'
+        +'Итого: '+entry.total_qty+' шт · '+(entry.total_boxes||0)+' кор · '+(entry.total_weight||0)+' кг'
+        +(entry.total_sum ? ' · <strong style="color:var(--accent)">'+entry.total_sum.toLocaleString('ru')+' ₽</strong>' : '')
+      +'</div>'
+    +'</div>';
+  }).join('');
+
+  const section = document.createElement('div');
+  section.id = 'orderHistorySection';
+  section.style.cssText = 'margin-top:16px;border-top:2px solid var(--warning);padding-top:14px';
+  section.innerHTML = '<div style="font-size:11px;font-weight:700;color:var(--warning);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">🕐 История версий заказа</div>' + html;
+  document.getElementById('modalBody').appendChild(section);
+  section.scrollIntoView({behavior:'smooth', block:'start'});
 }
 
 function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
