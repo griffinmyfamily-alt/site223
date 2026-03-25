@@ -2338,13 +2338,16 @@ function openOrderEdit(id) {
         const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
         console.log('Sheet range:', ws['!ref'], 'max col:', range.e.c, 'max row:', range.e.r);
         
-        // Build cell map by address for reliable access
+        // Build cell map by address for reliable access (works for merged cells in XLS)
         const cellMap = {}; // {row: {col: value}}
         Object.keys(ws).forEach(addr => {
           if (addr.startsWith('!')) return;
-          const cell = XLSX.utils.decode_cell(addr);
-          if (!cellMap[cell.r]) cellMap[cell.r] = {};
-          cellMap[cell.r][cell.c] = ws[addr].v !== undefined ? ws[addr].v : (ws[addr].w || '');
+          try {
+            const cell = XLSX.utils.decode_cell(addr);
+            const val = ws[addr].v !== undefined ? ws[addr].v : (ws[addr].w || '');
+            if (!cellMap[cell.r]) cellMap[cell.r] = {};
+            cellMap[cell.r][cell.c] = val;
+          } catch(e) {}
         });
         
         console.log('XLS rows count:', rows.length, 'cellMap rows:', Object.keys(cellMap).length);
@@ -2367,19 +2370,23 @@ function openOrderEdit(id) {
 
         if (is1C) {
           // === 1С СЧЁТ: динамически находим колонки по заголовкам ===
-          // Найти строку с заголовками
-          let colName = 1, colQty = -1, colPrice = -1;
+          // Найти строку с заголовками - ищем Товары, Кол-во, Цена
+          let colName = -1, colQty = -1, colPrice = -1;
           let headerRow = null;
-          for (let ri = 0; ri < rows.length; ri++) {
-            const r = rows[ri];
-            for (let ci = 0; ci < r.length; ci++) {
-              const cell = String(r[ci]||'').trim();
-              if (cell === 'Кол-во') { colQty = ci; headerRow = ri; }
-              if (cell === 'Цена') { colPrice = ci; }
+          // Scan cellMap (more reliable than rows array for XLS with merged cells)
+          const sortedRowKeys = Object.keys(cellMap).map(Number).sort((a,b)=>a-b);
+          for (const ri of sortedRowKeys) {
+            const rowCells = cellMap[ri];
+            let foundInRow = false;
+            for (const [ci, val] of Object.entries(rowCells)) {
+              const cell = String(val||'').trim();
+              if (cell.includes('Товары') || cell === 'Наименование') { colName = parseInt(ci); foundInRow = true; headerRow = ri; }
+              if (cell === 'Кол-во') { colQty = parseInt(ci); foundInRow = true; }
+              if (cell === 'Цена') { colPrice = parseInt(ci); }
             }
-            if (colQty >= 0 && colPrice >= 0) break;
+            if (colQty >= 0 && colPrice >= 0 && colName >= 0) break;
           }
-          console.log('1C columns detected: name='+colName+' qty='+colQty+' price='+colPrice+' headerRow='+headerRow);
+          console.log('1C columns: name='+colName+' qty='+colQty+' price='+colPrice+' headerRow='+headerRow);
 
           // Парсим строки с данными через cellMap (надёжнее для XLS с объединёнными ячейками)
           const dataStart = headerRow !== null ? headerRow + 1 : 6;
