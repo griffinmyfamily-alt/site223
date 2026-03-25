@@ -2337,11 +2337,28 @@ function openOrderEdit(id) {
         const isPrais = rows.some(r => codeRe.test(String(r[1]||'').trim()) && parseInt(r[14]) > 0);
 
         if (is1C) {
-          // === 1С СЧЁТ: col B=name, col W(22)=qty, col AH(34)=price ===
-          rows.forEach(row => {
-            const nameB = String(row[1]||'').trim();
-            const qty = parseFloat(String(row[22]||'').replace(',','.'));
-            const price = parseFloat(String(row[34]||'').replace(',','.'));
+          // === 1С СЧЁТ: динамически находим колонки по заголовкам ===
+          // Найти строку с заголовками
+          let colName = 1, colQty = -1, colPrice = -1;
+          let headerRow = null;
+          for (let ri = 0; ri < rows.length; ri++) {
+            const r = rows[ri];
+            for (let ci = 0; ci < r.length; ci++) {
+              const cell = String(r[ci]||'').trim();
+              if (cell === 'Кол-во') { colQty = ci; headerRow = ri; }
+              if (cell === 'Цена') { colPrice = ci; }
+            }
+            if (colQty >= 0 && colPrice >= 0) break;
+          }
+          console.log('1C columns detected: name='+colName+' qty='+colQty+' price='+colPrice+' headerRow='+headerRow);
+
+          // Парсим строки с данными (после заголовка)
+          const dataStart = headerRow !== null ? headerRow + 1 : 6;
+          rows.forEach((row, ri) => {
+            if (ri < dataStart) return;
+            const nameB = String(row[colName]||'').trim();
+            const qty = colQty >= 0 ? parseFloat(String(row[colQty]||'').replace(',','.')) : 0;
+            const price = colPrice >= 0 ? parseFloat(String(row[colPrice]||'').replace(',','.')) : 0;
             if (!nameB || !(qty > 0) || nameB.length < 5) return;
             if (!nameB.match(/[а-яА-Я]/) && !nameB.toLowerCase().includes('amp')) return;
 
