@@ -2240,7 +2240,7 @@ function printAdminOrderPDF(id) {
     +(hasPrices?'<div class="tot"><div class="tot-lbl">Сумма</div><div class="tot-val org">'+totSum.toLocaleString('ru')+' &#8381;</div></div>':'')
     +'</div>'
     +'<div class="foot"><span>AMP Car Audio &amp; Light — ampgroup.pro</span><span>'+dt+'</span></div>'
-    +'</script>
+    +'</'+'script>\n</script>
 </body></html>';
 
   const w = window.open('','_blank');
@@ -2420,4 +2420,3 @@ function openOrderEdit(id) {
     };
     reader.readAsArrayBuffer(file);
   };
-
