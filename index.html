@@ -2333,8 +2333,16 @@ function openOrderEdit(id) {
         let newItems = [], notFound = [];
 
         // Detect format
-        const is1C = rows.some(r => String(r[1]||'').includes('Товары (работы'));
+        // Debug: show first rows
+        console.log('XLS rows count:', rows.length);
+        console.log('First 3 rows:', rows.slice(0,3).map(r => r.slice(0,5)));
+        // Try all columns for "Товары" keyword
+        const tovaryRow = rows.find(r => r.some(c => String(c||'').includes('Товары')));
+        console.log('Товары row:', tovaryRow ? tovaryRow.slice(0,5) : 'NOT FOUND');
+
+        const is1C = rows.some(r => r.some(c => String(c||'').includes('Товары (работы')));
         const isPrais = rows.some(r => codeRe.test(String(r[1]||'').trim()) && parseInt(r[14]) > 0);
+        console.log('is1C:', is1C, 'isPrais:', isPrais);
 
         if (is1C) {
           // === 1С СЧЁТ: динамически находим колонки по заголовкам ===
