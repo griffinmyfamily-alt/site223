@@ -2240,8 +2240,7 @@ function printAdminOrderPDF(id) {
     +(hasPrices?'<div class="tot"><div class="tot-lbl">Сумма</div><div class="tot-val org">'+totSum.toLocaleString('ru')+' &#8381;</div></div>':'')
     +'</div>'
     +'<div class="foot"><span>AMP Car Audio &amp; Light — ampgroup.pro</span><span>'+dt+'</span></div>'
-    +'</'+'script>\n</script>
-</body></html>';
+    +'</body></html>';
 
   const w = window.open('','_blank');
   w.document.write(html); w.document.close(); setTimeout(function(){w.print();},500);
@@ -2420,3 +2419,110 @@ function openOrderEdit(id) {
     };
     reader.readAsArrayBuffer(file);
   };
+
+  const editHTML = `<div id="editOrderSection" style="margin-top:16px;border-top:2px solid var(--accent);padding-top:14px">
+    <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">✏️ Редактирование позиций</div>
+    <div style="overflow-x:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:var(--surface2)">
+          <th style="padding:6px 8px;width:32px;text-align:center;font-size:9px;color:var(--muted);text-transform:uppercase">#</th>
+          <th style="padding:6px 8px;text-align:left;font-size:9px;color:var(--muted);text-transform:uppercase">Наименование</th>
+          <th style="padding:6px 8px;width:130px;text-align:center;font-size:9px;color:var(--muted);text-transform:uppercase">Кол-во</th>
+          <th style="padding:6px 8px;width:60px;text-align:center;font-size:9px;color:var(--muted);text-transform:uppercase">Шт/кор</th>
+          <th style="padding:6px 8px;width:90px;text-align:center;font-size:9px;color:var(--muted);text-transform:uppercase">Коробок</th>
+          <th style="padding:6px 8px;width:100px;text-align:right;font-size:9px;color:var(--muted);text-transform:uppercase">Цена 1С, ₽</th>
+          <th style="width:32px"></th>
+        </tr></thead>
+        <tbody id="editItemsTable"></tbody>
+      </table>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:12px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--text)">📋 Импорт позиций</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('editFileInput').click()">📂 Загрузить файл из 1С</button>
+        <input type="file" id="editFileInput" accept=".xlsx,.xls" style="display:none" onchange="window._applyFileImport(event)">
+        <span style="font-size:10px;color:var(--muted)">Счёт (.xls) или прайс (.xlsx) — позиции и цены заменятся из файла</span>
+      </div>
+      <div id="importFileStatus" style="font-size:11px;min-height:16px;margin-bottom:6px"></div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">Или вставьте списком: <code style="background:var(--surface);padding:1px 4px;border-radius:3px">Код  количество</code></div>
+      <textarea id="editImportText" rows="3" style="width:100%;border:1px solid var(--border);border-radius:6px;padding:7px;font-size:12px;font-family:monospace;background:var(--surface);color:var(--text);resize:vertical" placeholder="В0000050176  12&#10;В0000036608  8"></textarea>
+      <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="window._applyTextImport()">➕ Применить список</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-primary btn-sm" onclick="saveOrderItems('${id}')">💾 Сохранить заказ</button>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('editOrderSection').remove();document.getElementById('editInfoSection')?.remove()">Отмена</button>
+      <span style="font-size:11px;color:var(--muted)" id="editSaveNote"></span>
+    </div>
+  </div>`;
+
+  const infoHTML = `<div id="editInfoSection" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+    <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📋 Контактная информация</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Компания</div><input class="cf-input" id="edit_company" value="${escHtml(order.client_company||'')}"></div>
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Контакт</div><input class="cf-input" id="edit_contact" value="${escHtml(order.client_name||'')}"></div>
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Телефон</div><input class="cf-input" id="edit_phone" value="${escHtml(order.client_phone||'')}"></div>
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Страна</div><input class="cf-input" id="edit_country" value="${escHtml(order.client_country||'')}"></div>
+      <div style="grid-column:span 2"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Комментарий</div><input class="cf-input" id="edit_comment" value="${escHtml(order.comment||'')}"></div>
+    </div>
+  </div>`;
+
+  document.getElementById('modalBody').innerHTML += editHTML + infoHTML;
+  renderEditTable();
+}
+
+async function saveOrderItems(id) {
+  const order = allOrdersCache.find(o => o.id === id);
+  if (!order) return;
+  const editItems = window._ampEditItems;
+  if (!editItems || !editItems.length) { showToast('Нет позиций', 'error'); return; }
+  document.querySelectorAll('#editItemsTable input[type=number]').forEach((inp,i) => {
+    if (editItems[i]) editItems[i].qty = parseInt(inp.value)||1;
+  });
+  editItems.forEach(item => { if (item.price_1c > 0) item.price_partner = item.price_1c; });
+  const totQty = editItems.reduce((s,i)=>s+i.qty,0);
+  const totBoxes = editItems.reduce((s,i)=>s+(i.ctn?Math.floor(i.qty/i.ctn):0),0);
+  const totWeight = +editItems.reduce((s,i)=>s+(Number(i.weight)||0)*i.qty,0).toFixed(3);
+  const totCBM = +editItems.reduce((s,i)=>s+(Number(i.cbm)||0)*i.qty,0).toFixed(5);
+  const totSum = +editItems.reduce((s,i)=>s+(i.price_partner?i.price_partner*i.qty:0),0).toFixed(2);
+  const updates = {
+    items: editItems, total_qty: totQty, total_boxes: totBoxes,
+    total_weight: totWeight, total_cbm: totCBM, total_sum: totSum,
+    client_company: document.getElementById('edit_company')?.value.trim() || order.client_company,
+    client_name: document.getElementById('edit_contact')?.value.trim() || order.client_name,
+    client_phone: document.getElementById('edit_phone')?.value.trim() || order.client_phone,
+    client_country: document.getElementById('edit_country')?.value.trim() || order.client_country,
+    comment: document.getElementById('edit_comment')?.value.trim() || order.comment,
+  };
+  const { error } = await sb.from('orders').update(updates).eq('id', id);
+  if (error) { showToast('Ошибка: ' + error.message, 'error'); return; }
+  const idx = allOrdersCache.findIndex(o => o.id === id);
+  if (idx >= 0) allOrdersCache[idx] = { ...allOrdersCache[idx], ...updates };
+  showToast('Заказ сохранён ✓', 'success');
+  document.getElementById('editOrderSection')?.remove();
+  document.getElementById('editInfoSection')?.remove();
+  renderOrdersList();
+  closeOrderModal();
+  setTimeout(() => openOrderModal(id), 200);
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+async function renderPricelistTab() {
+  const { count } = await sb.from('products').select('*', { count: 'exact', head: true });
+  const el = document.getElementById('pricelistStats');
+  if (el) el.innerHTML = count
+    ? '<div style="font-size:13px;color:var(--muted)">В базе: <strong style="color:var(--text)">'+count+' товаров</strong></div>'
+    : '<div style="font-size:13px;color:var(--muted)">База пуста — загрузите прайс</div>';
+}
+
+// ===== TOAST =====
+let toastTimer;
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = (type==='success'?'✅ ':'❌ ') + msg;
+  t.className = `toast ${type} show`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+</script>
+</body></html>
