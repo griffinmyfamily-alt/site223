@@ -417,6 +417,55 @@ tbody tr.row-not-full{background:rgba(255,68,68,0.05);}
           <input class="search-input" id="catEditorSearch" placeholder="Поиск по названию или коду..." oninput="filterCatalogEditor()">
         </div>
         <span id="catEditorCount" style="font-size:12px;color:var(--muted);white-space:nowrap;"></span>
+        <button class="btn btn-primary btn-sm" onclick="openAddProductModal()" style="margin-left:auto">➕ Добавить товар</button>
+      </div>
+      <!-- Add product modal -->
+      <div id="addProductModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:none;align-items:center;justify-content:center">
+        <div style="background:var(--surface);border-radius:16px;padding:24px;width:480px;max-width:95vw;border:1px solid var(--border)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <h3 style="margin:0;font-size:16px">➕ Новый товар</h3>
+            <button onclick="closeAddProductModal()" style="border:none;background:transparent;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+          </div>
+          <div style="display:grid;gap:10px">
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Код товара *</div>
+              <input id="newProdCode" class="cf-input" placeholder="В0000000000" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Наименование *</div>
+              <input id="newProdName" class="cf-input" placeholder="Усилитель AMP PRO 2.200" style="width:100%">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Шт/кор</div>
+                <input id="newProdCtn" class="cf-input" type="number" placeholder="6" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Вес, кг</div>
+                <input id="newProdWeight" class="cf-input" type="number" step="0.001" placeholder="1.500" style="width:100%">
+              </div>
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Габарит (см), пример: 33,0 х 19,5 х 8,0</div>
+              <input id="newProdDims" class="cf-input" placeholder="33,0 х 19,5 х 8,0" style="width:100%">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Цена партнёр, ₽</div>
+                <input id="newProdPricePartner" class="cf-input" type="number" placeholder="0" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Цена опт, ₽</div>
+                <input id="newProdPriceOpt" class="cf-input" type="number" placeholder="0" style="width:100%">
+              </div>
+            </div>
+            <div id="addProductError" style="color:var(--danger);font-size:12px;min-height:18px"></div>
+            <div style="display:flex;gap:8px;margin-top:4px">
+              <button class="btn btn-primary" onclick="saveNewProduct()" style="flex:1">💾 Сохранить</button>
+              <button class="btn btn-secondary" onclick="closeAddProductModal()">Отмена</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div id="catEditorList" style="overflow-x:auto;">
         <div class="orders-loading"><div class="spinner"></div></div>
@@ -1269,6 +1318,58 @@ function renderCatalogEditor() {
 
 function escHtmlCE(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function openAddProductModal() {
+  ['newProdCode','newProdName','newProdCtn','newProdWeight','newProdDims','newProdPricePartner','newProdPriceOpt'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('addProductError').textContent = '';
+  const modal = document.getElementById('addProductModal');
+  modal.style.display = 'flex';
+  document.getElementById('newProdCode').focus();
+}
+
+function closeAddProductModal() {
+  document.getElementById('addProductModal').style.display = 'none';
+}
+
+async function saveNewProduct() {
+  const code = document.getElementById('newProdCode').value.trim();
+  const name = document.getElementById('newProdName').value.trim();
+  const errEl = document.getElementById('addProductError');
+  if (!code || !name) { errEl.textContent = 'Код и наименование обязательны'; return; }
+
+  const ctn = parseInt(document.getElementById('newProdCtn').value) || null;
+  const weight = parseFloat(document.getElementById('newProdWeight').value.replace(',','.')) || null;
+  const dims = document.getElementById('newProdDims').value.trim() || null;
+  const price_partner = parseFloat(document.getElementById('newProdPricePartner').value) || null;
+  const price_opt = parseFloat(document.getElementById('newProdPriceOpt').value) || null;
+
+  // Calculate CBM from dims
+  let cbm = null;
+  if (dims) {
+    const parts = dims.replace(/\s/g,'').split('х').map(v => parseFloat(v.replace(',','.')));
+    if (parts.length === 3 && parts.every(v => !isNaN(v))) {
+      cbm = +(parts[0]*parts[1]*parts[2]/1000000).toFixed(6);
+    }
+  }
+
+  errEl.textContent = '⏳ Сохраняю...';
+  const { data, error } = await sb.from('products').insert([{
+    code, name, ctn, weight, dims, cbm, price_partner, price_opt,
+    active: true, updated_at: new Date().toISOString()
+  }]).select().single();
+
+  if (error) { errEl.textContent = 'Ошибка: ' + (error.message.includes('unique') ? 'Товар с таким кодом уже существует' : error.message); return; }
+
+  showToast('Товар добавлен: ' + name, 'success');
+  closeAddProductModal();
+  // Add to local cache and refresh
+  catEditorData.unshift(data);
+  initCatalog();
+  renderCatalogEditor();
 }
 
 async function toggleProductActive(id, active) {
