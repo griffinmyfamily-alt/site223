@@ -6,6 +6,7 @@
 <title>AMP — Калькулятор заказа</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
   :root {
     --bg: #0a0a0f; --surface: #12121a; --surface2: #1a1a26; --border: #2a2a3d;
@@ -1510,25 +1511,23 @@ function processPasteList() {
   const parsed = [];
 
   for (const line of lines) {
-    // Clean up separators: "AMP PRO 4.100FR - 3 шт" → "AMP PRO 4.100FR 3"
-    const cleaned = line
-      .replace(/[—–\-]+/g, ' ')   // дефисы и тире → пробел
-      .replace(/шт\.?/gi, '')      // убираем "шт"
-      .replace(/\s{2,}/g, ' ')
-      .trim();
+    // Split on " - " separator (space-dash-space) to separate name from qty
+    // Keep dashes inside model names like HRCA-5, ANL-03, D24U-02
+    let namePart = line, qtyPart = '';
+    const sepMatch = line.match(/^(.+?)\s+[-–—]\s+(\d+)\s*(шт\.?)?$/i);
+    if (sepMatch) {
+      namePart = sepMatch[1].trim();
+      qtyPart = sepMatch[2];
+    } else {
+      // Fallback: last standalone number is qty
+      const m = line.replace(/шт\.?/gi, '').trim().match(/^(.*?)\s+(\d+)\s*$/);
+      if (m) { namePart = m[1].trim(); qtyPart = m[2]; }
+    }
 
-    // Extract qty: last STANDALONE number (not part of "4.100FR" or "1.800")
-    const standaloneNums = cleaned.match(/(?<![.\d])(\d+)(?![.\d])/g);
-    if (!standaloneNums) continue;
-    const qty = parseInt(standaloneNums[standaloneNums.length - 1]);
-    if (!qty || qty <= 0) continue;
+    const qty = parseInt(qtyPart);
+    if (!qty || qty <= 0 || !namePart) continue;
 
-    // Name/code = everything except the last standalone number (and trailing punct/spaces)
-    const nameRaw = cleaned
-      .replace(/\s+\d+\s*$/, '')   // remove trailing standalone number
-      .replace(/[—–\-\s]+$/, '')   // remove trailing dashes/spaces
-      .trim();
-
+    const nameRaw = namePart.replace(/шт\.?/gi, '').trim();
     if (!nameRaw) continue;
 
     // Try exact code first
@@ -1668,21 +1667,24 @@ function normStr(s) {
     .replace(/\s+v\.?\s*\d+/g, ' ')  // remove ver.2 / v2 / v 3
     .replace(/ver\.\d+/g, '')
     .replace(/[().,]/g, ' ')
+    .replace(/-/g, '')               // remove ALL dashes for matching (HRCA-5 → HRCA5)
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 // Score how well two normalized strings match (0..1)
-// Uses ALL words (including short like H1, H4, H7) for precise LED/part matching
 function matchScore(a, b) {
   if (a === b) return 1;
   if (a.includes(b) || b.includes(a)) return 0.9;
-  // Include ALL words, even single-char — important for H1/H3/H4/H7/H11 etc
   const wa = new Set(a.split(' ').filter(w => w.length >= 1));
-  const wb2 = b.split(' ').filter(w => w.length >= 1);
-  if (!wa.size || !wb2.length) return 0;
-  const shared = wb2.filter(w => wa.has(w)).length;
-  return shared / Math.max(wa.size, wb2.length);
+  const wb = b.split(' ').filter(w => w.length >= 1);
+  if (!wa.size || !wb.length) return 0;
+  const shared = wb.filter(w => wa.has(w)).length;
+  // Boost score if all input words are found in catalog (input is subset of catalog name)
+  const inputWords = a.split(' ').filter(w => w.length >= 1);
+  const allInputFound = inputWords.every(w => wb.includes(w));
+  if (allInputFound && inputWords.length >= 2) return 0.85;
+  return shared / Math.max(wa.size, wb.length);
 }
 
 function findProductByName(rawName) {
@@ -1692,7 +1694,14 @@ function findProductByName(rawName) {
     const s = matchScore(norm, normStr(p.name));
     if (s > bestScore) { bestScore = s; best = p; }
   }
-  return bestScore >= 0.55 ? { product: best, score: bestScore } : { product: null, score: bestScore };
+  if (bestScore >= 0.45) return { product: best, score: bestScore };
+  // Fallback: search by model keyword — find longest word from input (4+ chars) in catalog
+  const words = norm.split(' ').filter(w => w.length >= 4).sort((a,b) => b.length - a.length);
+  for (const w of words) {
+    const hit = PRODUCTS.find(p => normStr(p.name).includes(w));
+    if (hit) return { product: hit, score: 0.45 };
+  }
+  return { product: null, score: bestScore };
 }
 
 function process1CRows(rows) {
@@ -1895,42 +1904,110 @@ document.getElementById('import1cOverlay').addEventListener('click', e => {
   if (e.target === document.getElementById('import1cOverlay')) closeImport1C();
 });
 
+function buildPDFHtml(rows, m) {
+  const totQty = rows.reduce((s,i)=>s+i.qty,0);
+  const totBoxes = rows.reduce((s,i)=>s+calcBoxes(i.qty,i.ctn),0);
+  const totWeight = rows.reduce((s,i)=>s+i.qty*(i.product.weight||0),0);
+  const totCBM = rows.reduce((s,i)=>s+i.qty*(i.product.cbm||0),0);
+  const trows = rows.map((item, idx) => {
+    const full = calcBoxes(item.qty, item.ctn);
+    const rem = calcRemainder(item.qty, item.ctn);
+    const isWarn = item.ctn && rem !== 0;
+    return '<tr style="background:'+(isWarn?'#fff5f0':(idx%2===0?'#fff':'#f8f8f8'))+'">'
+      +'<td>'+(idx+1)+'</td>'
+      +'<td style="text-align:left">'+item.product.name+'</td>'
+      +'<td style="color:#666">'+item.product.code+'</td>'
+      +'<td>'+item.qty+'</td>'
+      +'<td style="color:#999">'+item.ctn+'</td>'
+      +'<td style="color:'+(isWarn?'#FF5000':'inherit')+'">'+(full>0?full+' кор'+(rem>0?' +'+rem+' шт':''):'неполн. ('+rem+' из '+item.ctn+')')+'</td>'
+      +'<td>'+item.product.weight.toFixed(3)+'</td>'
+      +'<td style="color:#007AFF">'+item.product.cbm.toFixed(5)+'</td>'
+      +'<td style="color:#666;font-size:8px">'+item.product.dims+'</td>'
+      +'<td style="font-weight:600">'+(item.qty*item.product.weight).toFixed(3)+'</td>'
+      +'<td style="color:#007AFF">'+(item.qty*item.product.cbm).toFixed(5)+'</td>'
+      +'</tr>';
+  }).join('');
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    @page{margin:10mm;size:A4 landscape}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:9px;color:#1C1C1E;background:#fff;padding:12px}
+    .hdr{background:#FF5000;color:#fff;padding:10px 14px;border-radius:6px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+    .hdr-title{font-size:14px;font-weight:900;letter-spacing:2px}
+    .hdr-sub{font-size:10px;font-weight:600;opacity:.9}
+    .hdr-right{text-align:right;font-size:9px;opacity:.9;line-height:1.6}
+    .meta{display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+    .meta-item{background:#f7f7f7;border-radius:5px;padding:5px 10px;border-left:2px solid #FF5000}
+    .meta-label{font-size:7.5px;text-transform:uppercase;color:#999;letter-spacing:.7px}
+    .meta-value{font-size:12px;font-weight:800;color:#1C1C1E}
+    table{width:100%;border-collapse:collapse}
+    thead th{background:#1C1C1E;color:#fff;padding:5px 6px;text-align:center;font-size:7.5px;text-transform:uppercase;letter-spacing:.5px}
+    thead th.l{text-align:left}
+    td{padding:4px 6px;border-bottom:1px solid #efefef;text-align:center;vertical-align:middle}
+    tfoot td{background:#1C1C1E;color:#fff;padding:5px 6px;font-weight:700;font-size:9px;text-align:center}
+    tfoot td.sum{color:#FF5000;font-size:11px;font-weight:900}
+    .footer{margin-top:10px;padding-top:6px;border-top:1px solid #eee;font-size:7.5px;color:#bbb;display:flex;justify-content:space-between}
+  </style>
+  </head><body>
+  <div class="hdr">
+    <div><div class="hdr-title">AMP</div><div class="hdr-sub">Заказ: ${m.client}${m.country?' — '+m.country:''}</div></div>
+    <div class="hdr-right">Дата: ${m.date}<br>AMP Car Audio &amp; Light</div>
+  </div>
+  <div class="meta">
+    <div class="meta-item"><div class="meta-label">Позиций</div><div class="meta-value">${rows.length}</div></div>
+    <div class="meta-item"><div class="meta-label">Штук</div><div class="meta-value">${totQty}</div></div>
+    <div class="meta-item"><div class="meta-label">Коробок</div><div class="meta-value">${totBoxes}</div></div>
+    <div class="meta-item"><div class="meta-label">Вес, кг</div><div class="meta-value">${totWeight.toFixed(2)}</div></div>
+    <div class="meta-item"><div class="meta-label">Объём, м³</div><div class="meta-value" style="color:#FF5000">${totCBM.toFixed(4)}</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th style="width:22px">#</th>
+      <th class="l" style="width:28%">Наименование</th>
+      <th>Код</th><th>Шт</th><th>Шт/кор</th><th>Коробок</th>
+      <th>Вес 1шт</th><th>CBM 1шт</th><th>Габарит</th>
+      <th>Вес итого</th><th>CBM итого</th>
+    </tr></thead>
+    <tbody>${trows}</tbody>
+    <tfoot><tr>
+      <td colspan="3">ИТОГО</td>
+      <td class="sum">${totQty}</td><td></td>
+      <td class="sum">${totBoxes}</td>
+      <td></td><td></td><td></td>
+      <td class="sum">${totWeight.toFixed(3)}</td>
+      <td class="sum">${totCBM.toFixed(5)}</td>
+    </tr></tfoot>
+  </table>
+  <div class="footer"><span>AMP Car Audio &amp; Light — ampgroup.pro</span><span>${new Date().toLocaleString('ru')}</span></div>
+  </body></html>`;
+}
+
 function exportPDF(items, meta) {
   const rows = items || orderItems;
   if (rows.length === 0) { alert('Заказ пуст'); return; }
   const m = meta || getOrderData();
-  const totQty = rows.reduce((s,i)=>s+i.qty,0);
-  const totBoxes = rows.reduce((s,i)=>s+calcBoxes(i.qty,i.ctn),0);
-  const totWeight = rows.reduce((s,i)=>s+i.qty*i.product.weight,0);
-  const totCBM = rows.reduce((s,i)=>s+i.qty*i.product.cbm,0);
-  const trows = rows.map((item, idx) => {
-    const full = calcBoxes(item.qty, item.ctn);
-    const rem = calcRemainder(item.qty, item.ctn);
-    return `<tr>
-      <td>${idx+1}</td><td style="text-align:left">${item.product.name}</td>
-      <td>${item.product.code}</td><td>${item.qty}</td><td>${item.ctn}</td>
-      <td>${full}${rem>0?' +'+rem+'шт':''}</td>
-      <td>${item.product.weight.toFixed(3)}</td><td>${item.product.cbm.toFixed(5)}</td>
-      <td>${item.product.dims}</td>
-      <td>${(item.qty*item.product.weight).toFixed(3)}</td>
-      <td>${(item.qty*item.product.cbm).toFixed(5)}</td>
-    </tr>`;
-  }).join('');
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <style>body{font-family:Arial,sans-serif;font-size:10px;margin:20px;color:#222}h1{font-size:15px;margin-bottom:4px}.meta{color:#666;margin-bottom:14px}table{width:100%;border-collapse:collapse}th{background:#1a1a26;color:white;padding:5px;text-align:center;font-size:9px}td{padding:4px 5px;border-bottom:1px solid #ddd;text-align:center}tr:nth-child(even)td{background:#f9f9f9}.total-row td{font-weight:bold;background:#f0f4ff;border-top:2px solid #333}.footer{margin-top:14px;display:flex;justify-content:space-between;color:#999}</style>
-  </head><body>
-  <h1>AMP — Заказ: ${m.client}${m.country?' — '+m.country:''}</h1>
-  <div class="meta">Дата: ${m.date} | Позиций: ${rows.length} | Штук: ${totQty} | Коробок: ${totBoxes}</div>
-  <table><thead><tr><th>#</th><th style="text-align:left;width:28%">Наименование</th><th>Код</th><th>Шт</th><th>Шт/кор</th><th>Коробок</th><th>Вес 1шт</th><th>CBM 1шт</th><th>Габарит</th><th>Вес итого</th><th>CBM итого</th></tr></thead>
-  <tbody>${trows}</tbody>
-  <tfoot><tr class="total-row"><td colspan="3">ИТОГО</td><td>${totQty}</td><td></td><td>${totBoxes}</td><td></td><td></td><td></td><td>${totWeight.toFixed(3)}</td><td>${totCBM.toFixed(5)}</td></tr></tfoot>
-  </table>
-  <div class="footer"><span>AMP Car Audio & Light — ampgroup.pro</span><span>${new Date().toLocaleString('ru')}</span></div>
-  </body></html>`;
+  const html = buildPDFHtml(rows, m);
+
+  // Try html2pdf first (saves directly)
+  if (typeof html2pdf !== 'undefined') {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    const body = container.querySelector('body') || container;
+    const fname = 'AMP_' + (m.client||'заказ').replace(/\s/g,'_') + '_' + (m.date||'').replace(/\./g,'-') + '.pdf';
+    html2pdf().set({
+      margin: 5,
+      filename: fname,
+      image: { type:'jpeg', quality:0.98 },
+      html2canvas: { scale:2, useCORS:true },
+      jsPDF: { unit:'mm', format:'a4', orientation:'landscape' }
+    }).from(body).save();
+    return;
+  }
+  // Fallback: open in new window for manual save
   const win = window.open('','_blank');
   win.document.write(html);
   win.document.close();
-  win.onload = () => win.print();
+  setTimeout(() => win.print(), 500);
 }
 
 // ===== PRICE TEMPLATE EXPORT =====
