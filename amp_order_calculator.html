@@ -280,6 +280,7 @@
   <div class="top-tab" id="tab-catalog" onclick="switchTab('catalog')">📦 Редактор каталога</div>
   <div class="top-tab" id="tab-settings" onclick="switchTab('settings')">⚙️ Настройки</div>
   <div class="top-tab" id="tab-statform" onclick="switchTab('statform')">🛃 Статформа</div>
+  <div class="top-tab" id="tab-wb" onclick="switchTab('wb')">🟣 ВБ Заказ</div>
 </div>
 
 <!-- ===== TAB: ORDER ===== -->
@@ -389,6 +390,29 @@
     <div style="flex:1"></div>
     <span id="catModifiedBadge" style="display:none" class="cat-modified-count">✏️ <span id="catModifiedNum">0</span> изменений</span>
     <button class="btn btn-secondary btn-sm" onclick="resetAllCatalogEdits()" title="Сбросить все правки">↩ Сбросить всё</button>
+    <button class="btn btn-primary btn-sm" onclick="openAddProductForm()">➕ Добавить товар</button>
+  </div>
+  <!-- Add product inline form -->
+  <div id="addProductForm" style="display:none;background:var(--surface2);border-bottom:1px solid var(--border);padding:12px 20px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Код *</div>
+        <input id="apCode" class="search-input" placeholder="В0000000000" style="width:140px"></div>
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Наименование *</div>
+        <input id="apName" class="search-input" placeholder="Усилитель AMP PRO..." style="width:280px"></div>
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Шт/кор</div>
+        <input id="apCtn" class="search-input" type="number" placeholder="6" style="width:70px"></div>
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">ВБ кор.</div>
+        <input id="apCtnWb" class="search-input" type="number" placeholder="2" style="width:70px"></div>
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Вес, кг</div>
+        <input id="apWeight" class="search-input" type="number" step="0.001" placeholder="1.5" style="width:80px"></div>
+      <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px">Габарит (см)</div>
+        <input id="apDims" class="search-input" placeholder="33,0 х 19,5 х 8,0" style="width:150px"></div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-primary btn-sm" onclick="addProductLocal()">💾 Добавить</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('addProductForm').style.display='none'">Отмена</button>
+      </div>
+    </div>
+    <div id="apError" style="font-size:11px;color:var(--danger);min-height:16px;margin-top:4px"></div>
   </div>
   <div class="catalog-table-wrap">
     <table class="cat-tbl" id="catTable">
@@ -399,6 +423,7 @@
           <th onclick="sortCatalog('ctn')" id="cth-ctn" style="width:90px">Шт/кор</th>
           <th onclick="sortCatalog('weight')" id="cth-weight" style="width:90px">Вес, кг</th>
           <th onclick="sortCatalog('dims')" id="cth-dims" style="width:160px">Габарит (см)</th>
+          <th onclick="sortCatalog('ctn_wb')" id="cth-ctn-wb" style="width:80px" title="Кол-во в мастер-коробке для ВБ">ВБ кор.</th>
           <th style="width:72px;text-align:center" title="Показывать в каталоге заказа">В заказе</th>
           <th style="width:36px"></th>
         </tr>
@@ -516,6 +541,61 @@
   </div>
 </div>
 
+<!-- ===== TAB: WB ORDER ===== -->
+<div class="tab-page" id="page-wb">
+  <div class="order-actions-bar">
+    <button class="btn btn-secondary btn-sm" onclick="clearWbOrder()">🗑 Очистить</button>
+    <button class="btn btn-1c btn-sm" onclick="openWbPasteModal()">📋 Вставить список</button>
+    <button class="btn btn-1c btn-sm" onclick="document.getElementById('wbImportFile').click()">📥 Импорт файла</button>
+    <input type="file" id="wbImportFile" accept=".xlsx,.xls" style="display:none" onchange="wbImportFile(event)">
+    <div class="spacer"></div>
+    <button class="btn btn-export btn-sm" onclick="exportWbXLSX()">📊 Скачать XLSX</button>
+    <button class="btn btn-pdf btn-sm" onclick="exportWbPDF()">📄 PDF</button>
+    <button class="btn btn-save btn-sm" onclick="saveWbToHistory()">💾 Сохранить</button>
+  </div>
+  <div class="tab-page-inner">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>Каталог ВБ</h2>
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input class="search-input" id="wbSidebarSearch" placeholder="Поиск..." oninput="renderWbSidebar()">
+        </div>
+      </div>
+      <div class="category-tabs" id="wbCategoryTabs"></div>
+      <div class="product-list" id="wbProductList"></div>
+    </div>
+    <!-- MAIN -->
+    <div class="main">
+      <div class="table-area">
+        <table id="wbCartTable" style="display:none">
+          <thead><tr>
+            <th style="width:32px">#</th>
+            <th>Наименование товара</th>
+            <th class="num" style="width:110px">Артикул ВБ</th>
+            <th class="num">Кол-во, шт</th>
+            <th class="num">ВБ кор.</th>
+            <th class="num">Мастер-коробок</th>
+            <th style="width:36px"></th>
+          </tr></thead>
+          <tbody id="wbCartBody"></tbody>
+        </table>
+        <div class="empty-state" id="wbCartEmpty">
+          <div class="empty-icon">🟣</div>
+          <div class="empty-text">Выберите товары из каталога слева<br><span style="font-size:12px;color:var(--muted)">Только товары с ВБ коробкой доступны</span></div>
+        </div>
+      </div>
+      <div class="totals-bar">
+        <div class="total-block"><div class="total-label">Позиций</div><div class="total-value tv-blue" id="wbTPos">0</div></div>
+        <div class="total-block"><div class="total-label">Итого штук</div><div class="total-value tv-yellow" id="wbTQty">0</div></div>
+        <div class="total-block"><div class="total-label">Мастер-коробок</div><div class="total-value" style="color:#a78bfa" id="wbTBoxes">0</div></div>
+        <div class="spacer"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: paste list -->
 <div class="modal-overlay" id="pasteModalOverlay">
   <div class="modal" style="width:520px">
@@ -591,187 +671,187 @@ const PRODUCTS_RAW = [
 {"name":"Держатель предохранителя AMP MANL-01(125A) предохранитель в комплекте. (150)","code":"В0000028371","dims":"3,0 х 10,0 х 8,2","weight":0.07,"ctn":150},
 {"name":"Держатель предохранителя AMP MANL-01(60A) предохранитель в комплекте. (150)","code":"В0000028368","dims":"3,0 х 10,0 х 8,2","weight":0.07,"ctn":150},
 {"name":"Держатель предохранителя AMP MANL-01(80A) предохранитель в комплекте. (150)","code":"В0000028369","dims":"3,0 х 10,0 х 8,2","weight":0.07,"ctn":150},
-{"name":"Держатель предохранителя AMP MASS ANL-03(150A) предохранитель в комплекте. (100)","code":"В0000050421","dims":"4,0 х 18,0 х 8,0","weight":0.15,"ctn":100},
-{"name":"Держатель предохранителя AMP MASS MANL-02(100A) предохранитель в комплекте. (200)","code":"В0000050419","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200},
+{"name":"Держатель предохранителя AMP MASS ANL-03(150A) предохранитель в комплекте. (100)","code":"В0000050421","dims":"4,0 х 18,0 х 8,0","weight":0.15,"ctn":100,"ctn_wb":10,"wb_article":"915176932","wb_link":"https://www.wildberries.ru/catalog/915176932/detail.aspx"},
+{"name":"Держатель предохранителя AMP MASS MANL-02(100A) предохранитель в комплекте. (200)","code":"В0000050419","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200,"ctn_wb":10,"wb_article":"912985323","wb_link":"https://www.wildberries.ru/catalog/912985323/detail.aspx"},
 {"name":"Держатель предохранителя AMP MASS MANL-02(125A) предохранитель в комплекте. (200)","code":"В0000050420","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200},
-{"name":"Держатель предохранителя AMP MASS MANL-02(60A) предохранитель в комплекте. (200)","code":"В0000050417","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200},
-{"name":"Держатель предохранителя AMP MASS MANL-02(80A) предохранитель в комплекте. (200)","code":"В0000050418","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200},
+{"name":"Держатель предохранителя AMP MASS MANL-02(60A) предохранитель в комплекте. (200)","code":"В0000050417","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200,"ctn_wb":10},
+{"name":"Держатель предохранителя AMP MASS MANL-02(80A) предохранитель в комплекте. (200)","code":"В0000050418","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200,"ctn_wb":10},
 {"name":"Держатель предохранителя AMP PROMO ANL-02(150A) предохранитель в комплекте. (100)","code":"В0000050691","dims":"4,0 х 19,0 х 8,0","weight":0.15,"ctn":100},
-{"name":"Держатель предохранителя AMP PROMO MANL-01(100A) предохранитель в комплекте. (200)","code":"В0000050689","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200},
+{"name":"Держатель предохранителя AMP PROMO MANL-01(100A) предохранитель в комплекте. (200)","code":"В0000050689","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200,"ctn_wb":10},
 {"name":"Держатель предохранителя AMP PROMO MANL-01(125A) предохранитель в комплекте. (200)","code":"В0000050690","dims":"5,0 х 10,0 х 9,0","weight":0.2,"ctn":200},
-{"name":"Держатель предохранителя AMP PROMO MANL-01(60A) предохранитель в комплекте. (200)","code":"В0000050687","dims":"3,0 х 10,5 х 8,5","weight":0.1,"ctn":200},
-{"name":"Держатель предохранителя AMP PROMO MANL-01(80A) предохранитель в комплекте. (200)","code":"В0000050688","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200},
+{"name":"Держатель предохранителя AMP PROMO MANL-01(60A) предохранитель в комплекте. (200)","code":"В0000050687","dims":"3,0 х 10,5 х 8,5","weight":0.1,"ctn":200,"ctn_wb":10},
+{"name":"Держатель предохранителя AMP PROMO MANL-01(80A) предохранитель в комплекте. (200)","code":"В0000050688","dims":"3,0 х 10,5 х 8,5","weight":0.05,"ctn":200,"ctn_wb":10},
 {"name":"Дистрибьютор питания(распределитель) AMP DTU-01(вход 0/4GAx1, выход 0/4GAx2) (160)","code":"В0000045454","dims":"5,0 х 7,0 х 5,0","weight":0.25,"ctn":160},
-{"name":"Дистрибьютор питания(распределитель) AMP MASS DTU-02(вход 0/4GAx1, выход 0/4GAx2) (100)","code":"В0000050423","dims":"3,5 х 13,0 х 8,5","weight":0.1,"ctn":100},
-{"name":"Дистрибьютор питания(распределитель) AMP PROMO D24U-02(вход 0/4GAx2, выход 4/8GAx4) (50)","code":"В0000050422","dims":"3,0 х 13,5 х 13,5","weight":0.4,"ctn":50},
-{"name":"Дистрибьютор питания(распределитель) AMP PROMO DTU-01(вход 0/4GAx1, выход 0/4GAx2) (100)","code":"В0000050692","dims":"3,0 х 10,0 х 8,5","weight":0.1,"ctn":100},
-{"name":"Клемма силовая AMP \"Кольцо\" 4Ga (4шт)","code":"В0000034846","dims":"3,0 х 12,5 х 9,0","weight":0.025,"ctn":null},
-{"name":"Клемма силовая AMP \"Кольцо\" 8Ga (4шт)","code":"В0000034845","dims":"3,0 х 12,5 х 9,0","weight":0.025,"ctn":null},
-{"name":"Клемма-вилка AMP 4Ga (4шт)","code":"В0000034847","dims":"3,0 х 12,5 х 9,0","weight":0.025,"ctn":null},
-{"name":"Клемма-вилка AMP 8Ga (4шт)","code":"В0000034848","dims":"3,0 х 12,5 х 9,0","weight":0.025,"ctn":null},
+{"name":"Дистрибьютор питания(распределитель) AMP MASS DTU-02(вход 0/4GAx1, выход 0/4GAx2) (100)","code":"В0000050423","dims":"3,5 х 13,0 х 8,5","weight":0.1,"ctn":100,"ctn_wb":10},
+{"name":"Дистрибьютор питания(распределитель) AMP PROMO D24U-02(вход 0/4GAx2, выход 4/8GAx4) (50)","code":"В0000050422","dims":"3,0 х 13,5 х 13,5","weight":0.4,"ctn":50,"ctn_wb":10,"wb_article":"915184551","wb_link":"https://www.wildberries.ru/catalog/915184551/detail.aspx"},
+{"name":"Дистрибьютор питания(распределитель) AMP PROMO DTU-01(вход 0/4GAx1, выход 0/4GAx2) (100)","code":"В0000050692","dims":"3,0 х 10,0 х 8,5","weight":0.1,"ctn":100,"ctn_wb":10,"wb_article":"876335873","wb_link":"https://www.wildberries.ru/catalog/876335873/detail.aspx"},
+{"name":"Клемма силовая AMP \"Кольцо\" 4Ga (4шт)","code":"В0000034846","dims":"3,0 х 12,5 х 9,0","weight":0.025,"ctn":null,"ctn_wb":10,"wb_article":"876342304","wb_link":"https://www.wildberries.ru/catalog/876342304/detail.aspx"},
+{"name":"Клемма силовая AMP \"Кольцо\" 8Ga (4шт)","code":"В0000034845","dims":"3,0 х 12,5 х 9,0","weight":0.025,"ctn":null,"ctn_wb":10,"wb_article":"822578657","wb_link":"https://www.wildberries.ru/catalog/822578657/detail.aspx"},
+{"name":"Клемма-вилка AMP 4Ga (4шт)","code":"В0000034847","dims":"3,0 х 12,5 х 9,0","weight":0.025,"ctn":null,"ctn_wb":10,"wb_article":"822611472","wb_link":"https://www.wildberries.ru/catalog/822611472/detail.aspx"},
+{"name":"Клемма-вилка AMP 8Ga (4шт)","code":"В0000034848","dims":"3,0 х 12,5 х 9,0","weight":0.025,"ctn":null,"ctn_wb":10,"wb_article":"822610398","wb_link":"https://www.wildberries.ru/catalog/822610398/detail.aspx"},
 {"name":"Акустика коаксиальная AIRTONE NITRO 652 (6)","code":"В0000051655","dims":"38,5 х 18,0 х 9,0","weight":1.85,"ctn":6},
 {"name":"Акустика коаксиальная AIRTONE SONIX 502 (10)","code":"В0000051385","dims":"32,0 х 18,0 х 8,5","weight":1.0,"ctn":10},
 {"name":"Акустика коаксиальная AIRTONE SONIX 652 (10)","code":"В0000051386","dims":"39,0 х 19,6 х 9,7","weight":1.6,"ctn":10},
 {"name":"Акустика коаксиальная AIRTONE SONIX 692 (6)","code":"В0000051387","dims":"37,0 х 29,0 х 12,5","weight":2.2,"ctn":6},
 {"name":"Акустика компонентная AIRTONE NITRO 6.5 (6)","code":"В0000051654","dims":"45,5 х 19,5 х 11,0","weight":2.3,"ctn":6},
-{"name":"Акустика коаксиальная AMP Beat 502 v2 (12)","code":"В0000050319","dims":"32,0 х 17,5 х 8,0","weight":1.15,"ctn":12},
+{"name":"Акустика коаксиальная AMP Beat 502 v2 (12)","code":"В0000050319","dims":"32,0 х 17,5 х 8,0","weight":1.15,"ctn":12,"ctn_wb":12,"wb_article":"850060444","wb_link":"https://www.wildberries.ru/catalog/850060444/detail.aspx"},
 {"name":"Акустика коаксиальная AMP Beat 503(15)","code":"В0000031918","dims":"10,1 х 31,4 х 17,8","weight":1.36,"ctn":15},
-{"name":"Акустика коаксиальная AMP Beat 653 v2 (8)","code":"В0000050320","dims":"37,0 х 18,0 х 9,0","weight":1.65,"ctn":8},
+{"name":"Акустика коаксиальная AMP Beat 653 v2 (8)","code":"В0000050320","dims":"37,0 х 18,0 х 9,0","weight":1.65,"ctn":8,"ctn_wb":8,"wb_article":"863200780","wb_link":"https://www.wildberries.ru/catalog/863200780/detail.aspx"},
 {"name":"Акустика коаксиальная AMP Beat 653(10)","code":"В0000031919","dims":"10,5 х 36,9 х 21,2","weight":2.02,"ctn":10},
 {"name":"Акустика коаксиальная AMP Beat 692(6)","code":"В0000048021","dims":"14,0 х 36,4 х 29,4","weight":3.08,"ctn":6},
-{"name":"Акустика коаксиальная AMP Beat 693 v2 (6)","code":"В0000050321","dims":"36,5 х 29,5 х 14,0","weight":2.9,"ctn":6},
+{"name":"Акустика коаксиальная AMP Beat 693 v2 (6)","code":"В0000050321","dims":"36,5 х 29,5 х 14,0","weight":2.9,"ctn":6,"ctn_wb":6,"wb_article":"850808305","wb_link":"https://www.wildberries.ru/catalog/850808305/detail.aspx"},
 {"name":"Акустика коаксиальная AMP Beat 694(6)","code":"В0000031920","dims":"14,0 х 36,6 х 29,5","weight":3.08,"ctn":6},
-{"name":"Акустика коаксиальная AMP Concert 652 (12)","code":"В0000050176","dims":"36,0 х 18,2 х 9,0","weight":1.75,"ctn":12},
+{"name":"Акустика коаксиальная AMP Concert 652 (12)","code":"В0000050176","dims":"36,0 х 18,2 х 9,0","weight":1.75,"ctn":12,"ctn_wb":12,"wb_article":"863145690","wb_link":"https://www.wildberries.ru/catalog/863145690/detail.aspx"},
 {"name":"Акустика коаксиальная AMP LA 504(15)","code":"В0000031915","dims":"16,0 х 18,0 х 31,0","weight":1.66,"ctn":15},
 {"name":"Акустика коаксиальная AMP LA 694(6)","code":"В0000031917","dims":"20,0 х 51,0 х 20,0","weight":2.6,"ctn":6},
-{"name":"Акустика коаксиальная AMP MASS 502(10)","code":"В0000039250","dims":"29,0 х 14,5 х 8,0","weight":1.4,"ctn":10},
-{"name":"Акустика коаксиальная AMP MASS 652(8)","code":"В0000036608","dims":"36,8 х 19,3 х 8,0","weight":1.55,"ctn":8},
-{"name":"Акустика коаксиальная AMP MASS 692 (6)","code":"В0000051379","dims":"40,0 х 27,5 х 10,8","weight":2.25,"ctn":6},
+{"name":"Акустика коаксиальная AMP MASS 502(10)","code":"В0000039250","dims":"29,0 х 14,5 х 8,0","weight":1.4,"ctn":10,"ctn_wb":10,"wb_article":"850066354","wb_link":"https://www.wildberries.ru/catalog/850066354/detail.aspx"},
+{"name":"Акустика коаксиальная AMP MASS 652(8)","code":"В0000036608","dims":"36,8 х 19,3 х 8,0","weight":1.55,"ctn":8,"ctn_wb":8,"wb_article":"850073071","wb_link":"https://www.wildberries.ru/catalog/850073071/detail.aspx"},
+{"name":"Акустика коаксиальная AMP MASS 692 (6)","code":"В0000051379","dims":"40,0 х 27,5 х 10,8","weight":2.25,"ctn":6,"ctn_wb":6,"wb_article":"863426635","wb_link":"https://www.wildberries.ru/catalog/863426635/detail.aspx"},
 {"name":"Акустика коаксиальная AMP PRO 652 ver.2(8)","code":"В0000037095","dims":"10,7 х 36,1 х 21,4","weight":2.5,"ctn":8},
-{"name":"Акустика коаксиальная AMP PRO 652 ver.3(8)","code":"В0000046832","dims":"8,0 х 36,0 х 18,0","weight":1.7,"ctn":8},
+{"name":"Акустика коаксиальная AMP PRO 652 ver.3(8)","code":"В0000046832","dims":"8,0 х 36,0 х 18,0","weight":1.7,"ctn":8,"ctn_wb":8,"wb_article":"863235699","wb_link":"https://www.wildberries.ru/catalog/863235699/detail.aspx"},
 {"name":"Акустика коаксиальная AMP PRO 652(10)","code":"В0000034178","dims":"9,0 х 36,0 х 18,0","weight":2.25,"ctn":10},
 {"name":"Акустика коаксиальная AMP PRO 693(6)","code":"В0000039260","dims":"14,0 х 36,4 х 29,4","weight":3.5,"ctn":6},
-{"name":"Акустика коаксиальная AMP PRO X 652 (10)","code":"В0000050323","dims":"36,5 х 18,5 х 9,4","weight":1.85,"ctn":10},
-{"name":"Акустика коаксиальная AMP PRO X 652 v2(8)","code":"В0000050324","dims":"8,5 х 42,0 х 22,0","weight":2.5,"ctn":8},
-{"name":"Акустика коаксиальная AMP PRO X 652 v3(8)","code":"В0000050325","dims":"36,0 х 18,5 х 10,0","weight":2.3,"ctn":8},
-{"name":"Акустика коаксиальная AMP PRO X 693(6)","code":"В0000050326","dims":"36,3 х 29,5 х 14,0","weight":3.3,"ctn":6},
-{"name":"Акустика коаксиальная AMP RAGE 652 (8)","code":"В0000052126","dims":"42,5 х 24,0 х 10,4","weight":2.75,"ctn":8},
+{"name":"Акустика коаксиальная AMP PRO X 652 (10)","code":"В0000050323","dims":"36,5 х 18,5 х 9,4","weight":1.85,"ctn":10,"ctn_wb":10,"wb_article":"862982594","wb_link":"https://www.wildberries.ru/catalog/862982594/detail.aspx"},
+{"name":"Акустика коаксиальная AMP PRO X 652 v2(8)","code":"В0000050324","dims":"8,5 х 42,0 х 22,0","weight":2.5,"ctn":8,"ctn_wb":8},
+{"name":"Акустика коаксиальная AMP PRO X 652 v3(8)","code":"В0000050325","dims":"36,0 х 18,5 х 10,0","weight":2.3,"ctn":8,"ctn_wb":8},
+{"name":"Акустика коаксиальная AMP PRO X 693(6)","code":"В0000050326","dims":"36,3 х 29,5 х 14,0","weight":3.3,"ctn":6,"ctn_wb":6,"wb_article":"863426634","wb_link":"https://www.wildberries.ru/catalog/863426634/detail.aspx"},
+{"name":"Акустика коаксиальная AMP RAGE 652 (8)","code":"В0000052126","dims":"42,5 х 24,0 х 10,4","weight":2.75,"ctn":8,"ctn_wb":8,"wb_article":"863235701","wb_link":"https://www.wildberries.ru/catalog/863235701/detail.aspx"},
 {"name":"Акустика коаксиальная AMP Raid 502(10)","code":"В0000040511","dims":"29,0 х 14,5 х 8,0","weight":1.4,"ctn":10},
 {"name":"Акустика коаксиальная AMP Raid 652(8)","code":"В0000039248","dims":"36,5 х 19,0 х 8,0","weight":1.55,"ctn":8},
-{"name":"Акустика компонентная AMP Beat 6.5 v2 (4)","code":"В0000050322","dims":"37,5 х 19,5 х 12,5","weight":2.1,"ctn":4},
+{"name":"Акустика компонентная AMP Beat 6.5 v2 (4)","code":"В0000050322","dims":"37,5 х 19,5 х 12,5","weight":2.1,"ctn":4,"ctn_wb":4,"wb_article":"863200779","wb_link":"https://www.wildberries.ru/catalog/863200779/detail.aspx"},
 {"name":"Акустика компонентная AMP Beat 6.5(6)","code":"В0000031914","dims":"13,6 х 38,5 х 19,0","weight":2.48,"ctn":6},
-{"name":"Акустика компонентная AMP Concert 6.5 (6)","code":"В0000050175","dims":"37,5 х 19,5 х 12,5","weight":2.3,"ctn":6},
-{"name":"Акустика компонентная AMP MASS 5.25(10)","code":"В0000039249","dims":"34,5 х 17,5 х 8,0","weight":1.6,"ctn":10},
-{"name":"Акустика компонентная AMP MASS 6.5(8)","code":"В0000036607","dims":"40,0 х 8,0 х 19,0","weight":1.75,"ctn":8},
+{"name":"Акустика компонентная AMP Concert 6.5 (6)","code":"В0000050175","dims":"37,5 х 19,5 х 12,5","weight":2.3,"ctn":6,"ctn_wb":6,"wb_article":"863145689","wb_link":"https://www.wildberries.ru/catalog/863145689/detail.aspx"},
+{"name":"Акустика компонентная AMP MASS 5.25(10)","code":"В0000039249","dims":"34,5 х 17,5 х 8,0","weight":1.6,"ctn":10,"ctn_wb":10,"wb_article":"850079241","wb_link":"https://www.wildberries.ru/catalog/850079241/detail.aspx"},
+{"name":"Акустика компонентная AMP MASS 6.5(8)","code":"В0000036607","dims":"40,0 х 8,0 х 19,0","weight":1.75,"ctn":8,"ctn_wb":8,"wb_article":"822564049","wb_link":"https://www.wildberries.ru/catalog/822564049/detail.aspx"},
 {"name":"Акустика компонентная AMP PRO 6.5 ver.2(8)","code":"В0000037096","dims":"37,5 х 19,5 х 12,0","weight":2.7,"ctn":8},
 {"name":"Акустика компонентная AMP PRO 6.5 ver.3(8)","code":"В0000046833","dims":"37,5 х 19,5 х 13,0","weight":2.7,"ctn":8},
 {"name":"Акустика компонентная AMP PRO 6.5(8)","code":"В0000034179","dims":"10,4 х 36,7 х 21,3","weight":2.83,"ctn":8},
-{"name":"Акустика компонентная AMP PRO X 6.5 v2(8)","code":"В0000050328","dims":"8,5 х 55,0 х 22,0","weight":3.0,"ctn":8},
-{"name":"Акустика компонентная AMP PRO X 6.5 v3(8)","code":"В0000050329","dims":"8,5 х 55,0 х 22,0","weight":3.0,"ctn":8},
-{"name":"Акустика компонентная AMP PRO X 6.5(8)","code":"В0000050327","dims":"37,5 х 19,5 х 12,5","weight":2.55,"ctn":8},
-{"name":"Акустика компонентная AMP RAGE 6.5(6)","code":"В0000052127","dims":"51,8 х 24,0 х 10,5","weight":3.35,"ctn":6},
+{"name":"Акустика компонентная AMP PRO X 6.5 v2(8)","code":"В0000050328","dims":"8,5 х 55,0 х 22,0","weight":3.0,"ctn":8,"ctn_wb":8,"wb_article":"863200782","wb_link":"https://www.wildberries.ru/catalog/863200782/detail.aspx"},
+{"name":"Акустика компонентная AMP PRO X 6.5 v3(8)","code":"В0000050329","dims":"8,5 х 55,0 х 22,0","weight":3.0,"ctn":8,"ctn_wb":8,"wb_article":"863200783","wb_link":"https://www.wildberries.ru/catalog/863200783/detail.aspx"},
+{"name":"Акустика компонентная AMP PRO X 6.5(8)","code":"В0000050327","dims":"37,5 х 19,5 х 12,5","weight":2.55,"ctn":8,"ctn_wb":8,"wb_article":"863200781","wb_link":"https://www.wildberries.ru/catalog/863200781/detail.aspx"},
+{"name":"Акустика компонентная AMP RAGE 6.5(6)","code":"В0000052127","dims":"51,8 х 24,0 х 10,5","weight":3.35,"ctn":6,"ctn_wb":6,"wb_article":"863235700","wb_link":"https://www.wildberries.ru/catalog/863235700/detail.aspx"},
 {"name":"Акустика компонентная AMP Raid 5.25(10)","code":"В0000040512","dims":"34,5 х 17,5 х 8,0","weight":1.6,"ctn":10},
 {"name":"Акустика компонентная AMP Raid 6.5(8)","code":"В0000039247","dims":"40,0 х 19,5 х 8,0","weight":1.75,"ctn":8},
 {"name":"Акустика среднечастотная AMP PRO MR3 V3 (30)","code":"В0000050174","dims":"6,3 х 23,5 х 12,4","weight":0.08,"ctn":30},
-{"name":"Акустика среднечастотная AMP PRO X MR3 V3(30)","code":"В0000050331","dims":"6,0 х 23,5 х 12,5","weight":1.0,"ctn":30},
-{"name":"Акустика твитер AMP MASS TW10 (50) Шелк(с конденсатором)","code":"В0000038836","dims":"6,5 х 8,5 х 19,5","weight":0.2,"ctn":50},
+{"name":"Акустика среднечастотная AMP PRO X MR3 V3(30)","code":"В0000050331","dims":"6,0 х 23,5 х 12,5","weight":1.0,"ctn":30,"ctn_wb":10,"wb_article":"863692545","wb_link":"https://www.wildberries.ru/catalog/863692545/detail.aspx"},
+{"name":"Акустика твитер AMP MASS TW10 (50) Шелк(с конденсатором)","code":"В0000038836","dims":"6,5 х 8,5 х 19,5","weight":0.2,"ctn":50,"ctn_wb":10,"wb_article":"863692544","wb_link":"https://www.wildberries.ru/catalog/863692544/detail.aspx"},
 {"name":"Акустика твитер AMP PRO TW15 (50) Шелк(с конденсатором)","code":"В0000039241","dims":"5,1 х 18,7 х 13,3","weight":0.27,"ctn":50},
-{"name":"Акустика твитер AMP PRO X TW15 Silk(50) Шелк(с конденсатором)","code":"В0000050330","dims":"18,5 х 13,0 х 5,2","weight":0.25,"ctn":50},
-{"name":"Акустика твитер AMP PRO X TW15 Titanium (50) Титан (с конденсатором)","code":"В0000052012","dims":"18,5 х 13,0 х 5,2","weight":0.25,"ctn":50},
-{"name":"Акустика эстрадная AMP Hybrid FR65M20 широкополосная (1шт.) (8)","code":"В0000035485","dims":"8,5 х 21,0 х 19,4","weight":2.1,"ctn":8},
+{"name":"Акустика твитер AMP PRO X TW15 Silk(50) Шелк(с конденсатором)","code":"В0000050330","dims":"18,5 х 13,0 х 5,2","weight":0.25,"ctn":50,"ctn_wb":10,"wb_article":"863692546","wb_link":"https://www.wildberries.ru/catalog/863692546/detail.aspx"},
+{"name":"Акустика твитер AMP PRO X TW15 Titanium (50) Титан (с конденсатором)","code":"В0000052012","dims":"18,5 х 13,0 х 5,2","weight":0.25,"ctn":50,"ctn_wb":10},
+{"name":"Акустика эстрадная AMP Hybrid FR65M20 широкополосная (1шт.) (8)","code":"В0000035485","dims":"8,5 х 21,0 х 19,4","weight":2.1,"ctn":8,"ctn_wb":8},
 {"name":"Акустика эстрадная AMP Hybrid FR65M34 (шт)(8)(4ом) широкополосная","code":"В0000035486","dims":"8,6 х 21,2 х 19,6","weight":2.88,"ctn":8},
 {"name":"Акустика эстрадная AMP Hybrid FR80M25 (шт)(8)(4ом) широкополосная","code":"М0000002736","dims":"10,0 х 22,0 х 22,0","weight":2.0,"ctn":8},
 {"name":"Акустика эстрадная AMP Hybrid FR80M38 (шт)(8)(4ом) широкополосная","code":"М0000002737","dims":"10,2 х 24,2 х 22,7","weight":3.13,"ctn":8},
 {"name":"Акустика эстрадная AMP MASS FR40 (6)(4ом) широкополосная","code":"М0000002902","dims":"6,4 х 28,2 х 13,9","weight":1.25,"ctn":6},
-{"name":"Акустика эстрадная AMP MASS FR40P40 (12)(4ом) широкополосная","code":"В0000050623","dims":"25,3 х 12,2 х 6,0","weight":1.15,"ctn":12},
+{"name":"Акустика эстрадная AMP MASS FR40P40 (12)(4ом) широкополосная","code":"В0000050623","dims":"25,3 х 12,2 х 6,0","weight":1.15,"ctn":12,"ctn_wb":12,"wb_article":"863627254","wb_link":"https://www.wildberries.ru/catalog/863627254/detail.aspx"},
 {"name":"Акустика эстрадная AMP MASS FR52 (6)(4ом) широкополосная","code":"М0000002903","dims":"7,4 х 32,0 х 15,8","weight":1.53,"ctn":6},
-{"name":"Акустика эстрадная AMP MASS FR52P50 (8)(4ом) широкополосная","code":"В0000050624","dims":"30,5 х 15,0 х 7,0","weight":1.25,"ctn":8},
+{"name":"Акустика эстрадная AMP MASS FR52P50 (8)(4ом) широкополосная","code":"В0000050624","dims":"30,5 х 15,0 х 7,0","weight":1.25,"ctn":8,"ctn_wb":8,"wb_article":"863509137","wb_link":"https://www.wildberries.ru/catalog/863509137/detail.aspx"},
 {"name":"Акустика эстрадная AMP MASS FR65 (6)(4ом) широкополосная","code":"В0000035488","dims":"9,2 х 38,5 х 18,8","weight":2.17,"ctn":6},
-{"name":"Акустика эстрадная AMP MASS FR65P100 (4)(4ом) широкополосная","code":"В0000050628","dims":"37,0 х 18,5 х 7,8","weight":3.6,"ctn":4},
-{"name":"Акустика эстрадная AMP MASS FR65P120 (4)(4ом) широкополосная","code":"В0000050630","dims":"37,0 х 18,5 х 8,8","weight":4.45,"ctn":4},
-{"name":"Акустика эстрадная AMP MASS FR65P150 (3)(4ом) широкополосная","code":"В0000051391","dims":"39,5 х 19,5 х 9,5","weight":5.5,"ctn":3},
-{"name":"Акустика эстрадная AMP MASS FR65P60 (6)(4ом) широкополосная","code":"В0000050626","dims":"37,0 х 18,3 х 8,0","weight":1.95,"ctn":6},
+{"name":"Акустика эстрадная AMP MASS FR65P100 (4)(4ом) широкополосная","code":"В0000050628","dims":"37,0 х 18,5 х 7,8","weight":3.6,"ctn":4,"ctn_wb":4,"wb_article":"862982591","wb_link":"https://www.wildberries.ru/catalog/862982591/detail.aspx"},
+{"name":"Акустика эстрадная AMP MASS FR65P120 (4)(4ом) широкополосная","code":"В0000050630","dims":"37,0 х 18,5 х 8,8","weight":4.45,"ctn":4,"ctn_wb":4,"wb_article":"863011756","wb_link":"https://www.wildberries.ru/catalog/863011756/detail.aspx"},
+{"name":"Акустика эстрадная AMP MASS FR65P150 (3)(4ом) широкополосная","code":"В0000051391","dims":"39,5 х 19,5 х 9,5","weight":5.5,"ctn":3,"ctn_wb":3,"wb_article":"863235702","wb_link":"https://www.wildberries.ru/catalog/863235702/detail.aspx"},
+{"name":"Акустика эстрадная AMP MASS FR65P60 (6)(4ом) широкополосная","code":"В0000050626","dims":"37,0 х 18,3 х 8,0","weight":1.95,"ctn":6,"ctn_wb":6,"wb_article":"862982592","wb_link":"https://www.wildberries.ru/catalog/862982592/detail.aspx"},
 {"name":"Акустика эстрадная AMP MASS FR69 (4)(4ом) широкополосная","code":"В0000037168","dims":"9,9 х 41,3 х 28,3","weight":2.55,"ctn":4},
-{"name":"Акустика эстрадная AMP MASS FR69P70 (4)(4ом) широкополосная","code":"В0000050625","dims":"37,0 х 25,0 х 9,5","weight":2.5,"ctn":4},
-{"name":"Акустика эстрадная AMP MASS FR80P120 (4)(4ом) широкополосная","code":"В0000050629","dims":"45,0 х 22,5 х 10,0","weight":4.6,"ctn":4},
-{"name":"Акустика эстрадная AMP MASS FR80P150 (4)(4ом) широкополосная","code":"В0000050631","dims":"44,0 х 22,0 х 10,0","weight":4.7,"ctn":4},
-{"name":"Акустика эстрадная AMP MASS FR80P70 (4)(4ом) широкополосная","code":"В0000050627","dims":"45,0 х 22,5 х 10,3","weight":2.55,"ctn":4},
-{"name":"Акустика эстрадная AMP MASS TW40 (шт)(40) твитер","code":"М0000003099","dims":"12,0 х 11,5 х 5,5","weight":0.55,"ctn":40},
-{"name":"Акустика эстрадная AMP MASS TW95 (шт)(24) твитер","code":"В0000035487","dims":"10,5 х 11,0 х 5,0","weight":0.55,"ctn":24},
-{"name":"Акустика эстрадная AMP NEO FR65P150 (4)(4ом) широкополосная","code":"В0000052203","dims":"37,0 х 18,2 х 7,8","weight":1.9,"ctn":4},
+{"name":"Акустика эстрадная AMP MASS FR69P70 (4)(4ом) широкополосная","code":"В0000050625","dims":"37,0 х 25,0 х 9,5","weight":2.5,"ctn":4,"ctn_wb":4,"wb_article":"863426632","wb_link":"https://www.wildberries.ru/catalog/863426632/detail.aspx"},
+{"name":"Акустика эстрадная AMP MASS FR80P120 (4)(4ом) широкополосная","code":"В0000050629","dims":"45,0 х 22,5 х 10,0","weight":4.6,"ctn":4,"ctn_wb":4,"wb_article":"862951457","wb_link":"https://www.wildberries.ru/catalog/862951457/detail.aspx"},
+{"name":"Акустика эстрадная AMP MASS FR80P150 (4)(4ом) широкополосная","code":"В0000050631","dims":"44,0 х 22,0 х 10,0","weight":4.7,"ctn":4,"ctn_wb":4,"wb_article":"862951456","wb_link":"https://www.wildberries.ru/catalog/862951456/detail.aspx"},
+{"name":"Акустика эстрадная AMP MASS FR80P70 (4)(4ом) широкополосная","code":"В0000050627","dims":"45,0 х 22,5 х 10,3","weight":2.55,"ctn":4,"ctn_wb":4,"wb_article":"862909538","wb_link":"https://www.wildberries.ru/catalog/862909538/detail.aspx"},
+{"name":"Акустика эстрадная AMP MASS TW40 (шт)(40) твитер","code":"М0000003099","dims":"12,0 х 11,5 х 5,5","weight":0.55,"ctn":40,"ctn_wb":10,"wb_article":"863509136","wb_link":"https://www.wildberries.ru/catalog/863509136/detail.aspx"},
+{"name":"Акустика эстрадная AMP MASS TW95 (шт)(24) твитер","code":"В0000035487","dims":"10,5 х 11,0 х 5,0","weight":0.55,"ctn":24,"ctn_wb":10,"wb_article":"863627253","wb_link":"https://www.wildberries.ru/catalog/863627253/detail.aspx"},
+{"name":"Акустика эстрадная AMP NEO FR65P150 (4)(4ом) широкополосная","code":"В0000052203","dims":"37,0 х 18,2 х 7,8","weight":1.9,"ctn":4,"ctn_wb":4,"wb_article":"863235703","wb_link":"https://www.wildberries.ru/catalog/863235703/detail.aspx"},
 {"name":"Акустика эстрадная AMP NEO TW20 (шт)(80) твитер","code":"М0000002766","dims":"8,0 х 15,0 х 10,0","weight":0.25,"ctn":80},
-{"name":"Акустика эстрадная AMP NEO TW25 (шт)(40) твитер","code":"В0000035611","dims":"9,0 х 9,0 х 5,0","weight":0.2,"ctn":40},
-{"name":"Акустика эстрадная AMP PROMO FR40 v3 (20) широкополосная","code":"В0000050252","dims":"6,4 х 28,9 х 13,8","weight":1.0,"ctn":20},
+{"name":"Акустика эстрадная AMP NEO TW25 (шт)(40) твитер","code":"В0000035611","dims":"9,0 х 9,0 х 5,0","weight":0.2,"ctn":40,"ctn_wb":10,"wb_article":"863627252","wb_link":"https://www.wildberries.ru/catalog/863627252/detail.aspx"},
+{"name":"Акустика эстрадная AMP PROMO FR40 v3 (20) широкополосная","code":"В0000050252","dims":"6,4 х 28,9 х 13,8","weight":1.0,"ctn":20,"ctn_wb":20,"wb_article":"863692543","wb_link":"https://www.wildberries.ru/catalog/863692543/detail.aspx"},
 {"name":"Акустика эстрадная AMP PROMO FR40 ver.2 (20) широкополосная","code":"В0000036494","dims":"5,6 х 22,8 х 13,4","weight":0.65,"ctn":20},
-{"name":"Акустика эстрадная AMP PROMO FR52 v3 (15) широкополосная","code":"В0000050253","dims":"32,0 х 16,0 х 7,5","weight":1.15,"ctn":15},
+{"name":"Акустика эстрадная AMP PROMO FR52 v3 (15) широкополосная","code":"В0000050253","dims":"32,0 х 16,0 х 7,5","weight":1.15,"ctn":15,"ctn_wb":15,"wb_article":"863509138","wb_link":"https://www.wildberries.ru/catalog/863509138/detail.aspx"},
 {"name":"Акустика эстрадная AMP PROMO FR52 ver.2 (16) широкополосная","code":"В0000036495","dims":"8,0 х 30,0 х 16,8","weight":0.88,"ctn":16},
-{"name":"Акустика эстрадная AMP PROMO FR65 v3 (12) широкополосная","code":"В0000050254","dims":"38,0 х 18,8 х 8,5","weight":1.5,"ctn":12},
+{"name":"Акустика эстрадная AMP PROMO FR65 v3 (12) широкополосная","code":"В0000050254","dims":"38,0 х 18,8 х 8,5","weight":1.5,"ctn":12,"ctn_wb":12,"wb_article":"862982593","wb_link":"https://www.wildberries.ru/catalog/862982593/detail.aspx"},
 {"name":"Акустика эстрадная AMP PROMO FR65 ver.2 (12) широкополосная","code":"В0000036496","dims":"8,5 х 32,2 х 19,0","weight":1.25,"ctn":12},
-{"name":"Акустика эстрадная AMP PROMO FR69 v3 (6) широкополосная","code":"В0000050250","dims":"41,0 х 28,0 х 10,0","weight":2.45,"ctn":6},
+{"name":"Акустика эстрадная AMP PROMO FR69 v3 (6) широкополосная","code":"В0000050250","dims":"41,0 х 28,0 х 10,0","weight":2.45,"ctn":6,"ctn_wb":6,"wb_article":"863426633","wb_link":"https://www.wildberries.ru/catalog/863426633/detail.aspx"},
 {"name":"Акустика эстрадная AMP PROMO FR69 ver.2 (6) широкополосная","code":"В0000036497","dims":"20,0 х 51,0 х 20,0","weight":1.3,"ctn":6},
-{"name":"Акустика эстрадная AMP PROMO FR80 v3 (6) широкополосная","code":"В0000050255","dims":"46,0 х 22,6 х 10,6","weight":2.4,"ctn":6},
+{"name":"Акустика эстрадная AMP PROMO FR80 v3 (6) широкополосная","code":"В0000050255","dims":"46,0 х 22,6 х 10,6","weight":2.4,"ctn":6,"ctn_wb":6,"wb_article":"862951458","wb_link":"https://www.wildberries.ru/catalog/862951458/detail.aspx"},
 {"name":"Акустика эстрадная AMP PROMO FR80(шт)(9) широкополосная","code":"В0000036498","dims":"20,0 х 25,0 х 25,0","weight":0.8,"ctn":9},
-{"name":"Провод акустический AMP HYBRID 14Ga C/A Extremely flexible (50м) медь 70%+алюминий 30% (2)","code":"В0000045598","dims":"8,3 х 23,0 х 22,4","weight":6.4,"ctn":2},
-{"name":"Провод акустический AMP MASS 14Ga CCA Extremely flexible (50м) алюминий (2)","code":"В0000039605","dims":"23,0 х 23,0 х 8,5","weight":2.4,"ctn":2},
-{"name":"Провод акустический AMP MASS 16Ga CCA Extremely flexible (100м) алюминий (2)","code":"В0000039606","dims":"23,0 х 23,0 х 13,0","weight":3.35,"ctn":2},
-{"name":"Провод акустический AMP MASS 18Ga CCA Extremely flexible (100м) алюминий (2)","code":"В0000039607","dims":"23,0 х 22,5 х 10,0","weight":2.4,"ctn":2},
-{"name":"Провод акустический AMP PRO 12Ga OFC Extremely flexible (50м) медь 100% (2)","code":"В0000039597","dims":"23,0 х 23,0 х 11,0","weight":4.85,"ctn":2},
-{"name":"Провод акустический AMP PRO 14Ga OFC Extremely flexible (50м) медь 100% (2)","code":"В0000039598","dims":"23,0 х 23,0 х 8,5","weight":3.75,"ctn":2},
-{"name":"Провод акустический AMP PRO 16Ga OFC Extremely flexible (100м) медь 100% (2)","code":"В0000039599","dims":"23,0 х 23,0 х 13,0","weight":5.2,"ctn":2},
-{"name":"Провод акустический AMP PRO 18Ga OFC Extremely flexible (100м) медь 100% (2)","code":"В0000039600","dims":"23,0 х 23,0 х 10,0","weight":3.4,"ctn":2},
-{"name":"Провод акустический AMP PROMO 2х0.75 OFC (100м) Медь 100% (5)","code":"В0000040263","dims":"16,0 х 16,0 х 11,5","weight":2.25,"ctn":5},
-{"name":"Провод акустический AMP PROMO 2х1.5 OFC (100м) Медь 100% (4)","code":"В0000040264","dims":"20,0 х 20,0 х 11,0","weight":4.0,"ctn":4},
-{"name":"Провод акустический AMP PROMO 2х2.5 OFC (50м) Медь 100% (5)","code":"В0000040265","dims":"16,0 х 16,0 х 11,0","weight":3.15,"ctn":5},
-{"name":"Провод акустический AMP PROMO 2х4 OFC (50м) Медь 100% (4)","code":"В0000051721","dims":"19,5 х 19,5 х 11,5","weight":5.2,"ctn":4},
-{"name":"Провода комплект AMP MASS 2.04 для 2х канального усилителя (CCA)(10)","code":"В0000045584","dims":"21,0 х 21,0 х 7,0","weight":1.35,"ctn":10},
-{"name":"Провода комплект AMP MASS 2.08 для 2х канального усилителя (CCA)(10)","code":"В0000045585","dims":"18,0 х 18,0 х 6,0","weight":0.85,"ctn":10},
-{"name":"Провода комплект AMP MASS 2.10 для 2х канального усилителя (CCA)(10)","code":"В0000045586","dims":"18,0 х 18,0 х 6,0","weight":0.7,"ctn":10},
-{"name":"Провода комплект AMP MASS 4.04 для 4х канального усилителя (CCA)(10)","code":"В0000045587","dims":"21,0 х 21,0 х 7,0","weight":1.5,"ctn":10},
-{"name":"Провода комплект AMP MASS 4.08 для 4х канального усилителя (CCA)(10)","code":"В0000045588","dims":"21,0 х 21,0 х 7,0","weight":1.05,"ctn":10},
-{"name":"Провод силовой AMP HYBRID 4Ga C/A Extremely flexible (25м) медь 70%+алюминий 30% (2)","code":"В0000045596","dims":"11,5 х 23,0 х 22,4","weight":11.0,"ctn":2},
-{"name":"Провод силовой AMP HYBRID 8Ga C/A Extremely flexible (50м) медь 70%+алюминий 30% (2)","code":"В0000045597","dims":"11,5 х 23,0 х 22,4","weight":9.4,"ctn":2},
-{"name":"Провод силовой AMP MASS 4Ga CCA Extremely flexible Красный (25м) алюминий (2)","code":"В0000039601","dims":"23,0 х 22,5 х 12,0","weight":3.45,"ctn":2},
-{"name":"Провод силовой AMP MASS 4Ga CCA Extremely flexible Черный (25м) алюминий (2)","code":"В0000039602","dims":"23,0 х 22,5 х 12,0","weight":3.45,"ctn":2},
-{"name":"Провод силовой AMP MASS 8Ga CCA Extremely flexible Красный (50м) алюминий (2)","code":"В0000039603","dims":"23,0 х 23,0 х 10,0","weight":2.95,"ctn":2},
-{"name":"Провод силовой AMP MASS 8Ga CCA Extremely flexible Черный (50м) алюминий (2)","code":"В0000039604","dims":"23,0 х 23,0 х 10,0","weight":2.95,"ctn":2},
-{"name":"Провод силовой AMP PRO 0Ga OFC Extremely flexible Красный (15м) медь 100% (2)","code":"В0000050640","dims":"23,0 х 23,0 х 16,0","weight":9.45,"ctn":2},
-{"name":"Провод силовой AMP PRO 0Ga OFC Extremely flexible Черный (15м) медь 100% (2)","code":"В0000050641","dims":"23,0 х 23,0 х 16,0","weight":9.45,"ctn":2},
-{"name":"Провод силовой AMP PRO 2Ga OFC Extremely flexible Красный (25м) медь 100% (2)","code":"В0000042202","dims":"23,0 х 22,5 х 15,0","weight":9.65,"ctn":2},
-{"name":"Провод силовой AMP PRO 2Ga OFC Extremely flexible Черный (25м) медь 100% (2)","code":"В0000042203","dims":"23,0 х 22,5 х 12,0","weight":9.65,"ctn":2},
-{"name":"Провод силовой AMP PRO 4Ga OFC Extremely flexible Красный (25м) медь 100% (2)","code":"В0000039593","dims":"23,0 х 23,0 х 12,0","weight":6.75,"ctn":2},
-{"name":"Провод силовой AMP PRO 4Ga OFC Extremely flexible Черный (25м) медь 100% (2)","code":"В0000039594","dims":"23,0 х 23,0 х 12,0","weight":6.75,"ctn":2},
-{"name":"Провод силовой AMP PRO 8Ga OFC Extremely flexible Красный (50м) медь 100% (2)","code":"В0000039595","dims":"23,0 х 23,0 х 10,0","weight":5.5,"ctn":2},
-{"name":"Провод силовой AMP PRO 8Ga OFC Extremely flexible Черный (50м) медь 100% (2)","code":"В0000039596","dims":"23,0 х 23,0 х 10,0","weight":5.5,"ctn":2},
-{"name":"Провод силовой AMP PROMO 0Ga OFC Красный (15м) медь 100%","code":"В0000051340","dims":"23,0 х 22,5 х 16,0","weight":8.05,"ctn":null},
-{"name":"Провод силовой AMP PROMO 0Ga OFC Черный (15м) медь 100%","code":"В0000051341","dims":"23,0 х 22,5 х 16,0","weight":8.05,"ctn":null},
-{"name":"Провод силовой AMP PROMO 2Ga OFC Красный (25м) медь 100%","code":"В0000051343","dims":"23,0 х 23,0 х 15,0","weight":8.55,"ctn":null},
-{"name":"Провод силовой AMP PROMO 2Ga OFC Черный (25м) медь 100%","code":"В0000051342","dims":"23,0 х 23,0 х 15,0","weight":8.55,"ctn":null},
-{"name":"Провод соединительный AMP FRCA-1 Межблочный кабель-медь+экран (1м) (20)","code":"В0000034851","dims":"11,0 х 9,0 х 4,0","weight":0.05,"ctn":20},
-{"name":"Провод соединительный AMP FRCA-2 Межблочный кабель-медь+экран (2м) (20)","code":"В0000034852","dims":"11,0 х 9,0 х 4,0","weight":0.1,"ctn":20},
-{"name":"Провод соединительный AMP FRCA-3 Межблочный кабель-медь+экран (3м) (20)","code":"В0000034853","dims":"11,0 х 9,0 х 4,0","weight":0.15,"ctn":20},
+{"name":"Провод акустический AMP HYBRID 14Ga C/A Extremely flexible (50м) медь 70%+алюминий 30% (2)","code":"В0000045598","dims":"8,3 х 23,0 х 22,4","weight":6.4,"ctn":2,"ctn_wb":100},
+{"name":"Провод акустический AMP MASS 14Ga CCA Extremely flexible (50м) алюминий (2)","code":"В0000039605","dims":"23,0 х 23,0 х 8,5","weight":2.4,"ctn":2,"ctn_wb":100},
+{"name":"Провод акустический AMP MASS 16Ga CCA Extremely flexible (100м) алюминий (2)","code":"В0000039606","dims":"23,0 х 23,0 х 13,0","weight":3.35,"ctn":2,"ctn_wb":200},
+{"name":"Провод акустический AMP MASS 18Ga CCA Extremely flexible (100м) алюминий (2)","code":"В0000039607","dims":"23,0 х 22,5 х 10,0","weight":2.4,"ctn":2,"ctn_wb":200},
+{"name":"Провод акустический AMP PRO 12Ga OFC Extremely flexible (50м) медь 100% (2)","code":"В0000039597","dims":"23,0 х 23,0 х 11,0","weight":4.85,"ctn":2,"ctn_wb":100,"wb_article":"912294201","wb_link":"https://www.wildberries.ru/catalog/912294201/detail.aspx"},
+{"name":"Провод акустический AMP PRO 14Ga OFC Extremely flexible (50м) медь 100% (2)","code":"В0000039598","dims":"23,0 х 23,0 х 8,5","weight":3.75,"ctn":2,"ctn_wb":100,"wb_article":"912306091","wb_link":"https://www.wildberries.ru/catalog/912306091/detail.aspx"},
+{"name":"Провод акустический AMP PRO 16Ga OFC Extremely flexible (100м) медь 100% (2)","code":"В0000039599","dims":"23,0 х 23,0 х 13,0","weight":5.2,"ctn":2,"ctn_wb":200,"wb_article":"912315430","wb_link":"https://www.wildberries.ru/catalog/912315430/detail.aspx"},
+{"name":"Провод акустический AMP PRO 18Ga OFC Extremely flexible (100м) медь 100% (2)","code":"В0000039600","dims":"23,0 х 23,0 х 10,0","weight":3.4,"ctn":2,"ctn_wb":200,"wb_article":"912323913","wb_link":"https://www.wildberries.ru/catalog/912323913/detail.aspx"},
+{"name":"Провод акустический AMP PROMO 2х0.75 OFC (100м) Медь 100% (5)","code":"В0000040263","dims":"16,0 х 16,0 х 11,5","weight":2.25,"ctn":5,"ctn_wb":200},
+{"name":"Провод акустический AMP PROMO 2х1.5 OFC (100м) Медь 100% (4)","code":"В0000040264","dims":"20,0 х 20,0 х 11,0","weight":4.0,"ctn":4,"ctn_wb":200},
+{"name":"Провод акустический AMP PROMO 2х2.5 OFC (50м) Медь 100% (5)","code":"В0000040265","dims":"16,0 х 16,0 х 11,0","weight":3.15,"ctn":5,"ctn_wb":100},
+{"name":"Провод акустический AMP PROMO 2х4 OFC (50м) Медь 100% (4)","code":"В0000051721","dims":"19,5 х 19,5 х 11,5","weight":5.2,"ctn":4,"ctn_wb":100},
+{"name":"Провода комплект AMP MASS 2.04 для 2х канального усилителя (CCA)(10)","code":"В0000045584","dims":"21,0 х 21,0 х 7,0","weight":1.35,"ctn":10,"ctn_wb":10,"wb_article":"865686085","wb_link":"https://www.wildberries.ru/catalog/865686085/detail.aspx"},
+{"name":"Провода комплект AMP MASS 2.08 для 2х канального усилителя (CCA)(10)","code":"В0000045585","dims":"18,0 х 18,0 х 6,0","weight":0.85,"ctn":10,"ctn_wb":10,"wb_article":"865686086","wb_link":"https://www.wildberries.ru/catalog/865686086/detail.aspx"},
+{"name":"Провода комплект AMP MASS 2.10 для 2х канального усилителя (CCA)(10)","code":"В0000045586","dims":"18,0 х 18,0 х 6,0","weight":0.7,"ctn":10,"ctn_wb":10,"wb_article":"865686087","wb_link":"https://www.wildberries.ru/catalog/865686087/detail.aspx"},
+{"name":"Провода комплект AMP MASS 4.04 для 4х канального усилителя (CCA)(10)","code":"В0000045587","dims":"21,0 х 21,0 х 7,0","weight":1.5,"ctn":10,"ctn_wb":10,"wb_article":"865686088","wb_link":"https://www.wildberries.ru/catalog/865686088/detail.aspx"},
+{"name":"Провода комплект AMP MASS 4.08 для 4х канального усилителя (CCA)(10)","code":"В0000045588","dims":"21,0 х 21,0 х 7,0","weight":1.05,"ctn":10,"ctn_wb":10,"wb_article":"865686089","wb_link":"https://www.wildberries.ru/catalog/865686089/detail.aspx"},
+{"name":"Провод силовой AMP HYBRID 4Ga C/A Extremely flexible (25м) медь 70%+алюминий 30% (2)","code":"В0000045596","dims":"11,5 х 23,0 х 22,4","weight":11.0,"ctn":2,"ctn_wb":50},
+{"name":"Провод силовой AMP HYBRID 8Ga C/A Extremely flexible (50м) медь 70%+алюминий 30% (2)","code":"В0000045597","dims":"11,5 х 23,0 х 22,4","weight":9.4,"ctn":2,"ctn_wb":100},
+{"name":"Провод силовой AMP MASS 4Ga CCA Extremely flexible Красный (25м) алюминий (2)","code":"В0000039601","dims":"23,0 х 22,5 х 12,0","weight":3.45,"ctn":2,"ctn_wb":50,"wb_article":"912294201","wb_link":"https://www.wildberries.ru/catalog/912294201/detail.aspx"},
+{"name":"Провод силовой AMP MASS 4Ga CCA Extremely flexible Черный (25м) алюминий (2)","code":"В0000039602","dims":"23,0 х 22,5 х 12,0","weight":3.45,"ctn":2,"ctn_wb":50},
+{"name":"Провод силовой AMP MASS 8Ga CCA Extremely flexible Красный (50м) алюминий (2)","code":"В0000039603","dims":"23,0 х 23,0 х 10,0","weight":2.95,"ctn":2,"ctn_wb":100},
+{"name":"Провод силовой AMP MASS 8Ga CCA Extremely flexible Черный (50м) алюминий (2)","code":"В0000039604","dims":"23,0 х 23,0 х 10,0","weight":2.95,"ctn":2,"ctn_wb":100},
+{"name":"Провод силовой AMP PRO 0Ga OFC Extremely flexible Красный (15м) медь 100% (2)","code":"В0000050640","dims":"23,0 х 23,0 х 16,0","weight":9.45,"ctn":2,"ctn_wb":30},
+{"name":"Провод силовой AMP PRO 0Ga OFC Extremely flexible Черный (15м) медь 100% (2)","code":"В0000050641","dims":"23,0 х 23,0 х 16,0","weight":9.45,"ctn":2,"ctn_wb":30},
+{"name":"Провод силовой AMP PRO 2Ga OFC Extremely flexible Красный (25м) медь 100% (2)","code":"В0000042202","dims":"23,0 х 22,5 х 15,0","weight":9.65,"ctn":2,"ctn_wb":50},
+{"name":"Провод силовой AMP PRO 2Ga OFC Extremely flexible Черный (25м) медь 100% (2)","code":"В0000042203","dims":"23,0 х 22,5 х 12,0","weight":9.65,"ctn":2,"ctn_wb":50},
+{"name":"Провод силовой AMP PRO 4Ga OFC Extremely flexible Красный (25м) медь 100% (2)","code":"В0000039593","dims":"23,0 х 23,0 х 12,0","weight":6.75,"ctn":2,"ctn_wb":50},
+{"name":"Провод силовой AMP PRO 4Ga OFC Extremely flexible Черный (25м) медь 100% (2)","code":"В0000039594","dims":"23,0 х 23,0 х 12,0","weight":6.75,"ctn":2,"ctn_wb":50},
+{"name":"Провод силовой AMP PRO 8Ga OFC Extremely flexible Красный (50м) медь 100% (2)","code":"В0000039595","dims":"23,0 х 23,0 х 10,0","weight":5.5,"ctn":2,"ctn_wb":100},
+{"name":"Провод силовой AMP PRO 8Ga OFC Extremely flexible Черный (50м) медь 100% (2)","code":"В0000039596","dims":"23,0 х 23,0 х 10,0","weight":5.5,"ctn":2,"ctn_wb":100},
+{"name":"Провод силовой AMP PROMO 0Ga OFC Красный (15м) медь 100%","code":"В0000051340","dims":"23,0 х 22,5 х 16,0","weight":8.05,"ctn":null,"ctn_wb":30,"wb_article":"895790872","wb_link":"https://www.wildberries.ru/catalog/895790872/detail.aspx"},
+{"name":"Провод силовой AMP PROMO 0Ga OFC Черный (15м) медь 100%","code":"В0000051341","dims":"23,0 х 22,5 х 16,0","weight":8.05,"ctn":null,"ctn_wb":30},
+{"name":"Провод силовой AMP PROMO 2Ga OFC Красный (25м) медь 100%","code":"В0000051343","dims":"23,0 х 23,0 х 15,0","weight":8.55,"ctn":null,"ctn_wb":50},
+{"name":"Провод силовой AMP PROMO 2Ga OFC Черный (25м) медь 100%","code":"В0000051342","dims":"23,0 х 23,0 х 15,0","weight":8.55,"ctn":null,"ctn_wb":50},
+{"name":"Провод соединительный AMP FRCA-1 Межблочный кабель-медь+экран (1м) (20)","code":"В0000034851","dims":"11,0 х 9,0 х 4,0","weight":0.05,"ctn":20,"ctn_wb":10},
+{"name":"Провод соединительный AMP FRCA-2 Межблочный кабель-медь+экран (2м) (20)","code":"В0000034852","dims":"11,0 х 9,0 х 4,0","weight":0.1,"ctn":20,"ctn_wb":10},
+{"name":"Провод соединительный AMP FRCA-3 Межблочный кабель-медь+экран (3м) (20)","code":"В0000034853","dims":"11,0 х 9,0 х 4,0","weight":0.15,"ctn":20,"ctn_wb":10},
 {"name":"Провод соединительный AMP FRCA-5 Межблочный кабель-медь+экран (5м) (80)","code":"В0000034854","dims":"4,5 х 10,0 х 12,0","weight":0.15,"ctn":80},
-{"name":"Провод соединительный AMP HRCA-1 Межблочный кабель-медь+2 экрана (1м)(80)","code":"В0000039142","dims":"11,0 х 9,0 х 4,0","weight":0.15,"ctn":80},
+{"name":"Провод соединительный AMP HRCA-1 Межблочный кабель-медь+2 экрана (1м)(80)","code":"В0000039142","dims":"11,0 х 9,0 х 4,0","weight":0.15,"ctn":80,"ctn_wb":10},
 {"name":"Провод соединительный AMP HRCA-2 Межблочный кабель-медь+2 экрана (2м)","code":"В0000039143","dims":"4,0 х 14,5 х 9,0","weight":0.118,"ctn":null},
-{"name":"Провод соединительный AMP HRCA-3 Межблочный кабель-медь+2 экрана (3м)(40)","code":"В0000039144","dims":"16,0 х 14,0 х 4,5","weight":0.3,"ctn":40},
-{"name":"Провод соединительный AMP HRCA-5 Межблочный кабель-медь+2 экрана (5м)(40)","code":"В0000032358","dims":"16,0 х 14,0 х 4,5","weight":0.45,"ctn":40},
-{"name":"Провод соединительный AMP M-1M2F RCA-Разветвитель 1ПАПА-2МАМА(160)","code":"В0000033981","dims":"3,0 х 7,0 х 14,0","weight":0.03,"ctn":160},
-{"name":"Провод соединительный AMP M-2M1F RCA-Разветвитель 1МАМА-2ПАПА(160)","code":"В0000033982","dims":"3,0 х 7,0 х 14,0","weight":0.03,"ctn":160},
-{"name":"Провод соединительный AMP MRCA-1 Межблочный кабель-медь (1м) (20)","code":"В0000033924","dims":"11,0 х 9,0 х 4,0","weight":0.05,"ctn":20},
-{"name":"Провод соединительный AMP MRCA-2 Межблочный кабель-медь (2м) (20)","code":"В0000033925","dims":"11,0 х 9,0 х 4,0","weight":0.1,"ctn":20},
-{"name":"Провод соединительный AMP MRCA-3 Межблочный кабель-медь (3м) (20)","code":"В0000033926","dims":"11,0 х 9,0 х 4,0","weight":0.15,"ctn":20},
-{"name":"Провод соединительный AMP MRCA-5 Межблочный кабель-медь (5м) (80)","code":"В0000027987","dims":"12,0 х 10,0 х 4,5","weight":0.2,"ctn":80},
-{"name":"Провод соединительный AMP S-1M2F RCA-Разветвитель 1ПАПА-2МАМА(200)","code":"В0000036971","dims":"3,0 х 7,0 х 14,0","weight":0.05,"ctn":200},
-{"name":"Провод соединительный AMP S-2M1F RCA-Разветвитель 1МАМА-2ПАПА(200)","code":"В0000036972","dims":"3,0 х 7,0 х 14,0","weight":0.05,"ctn":200},
-{"name":"Провод соединительный AMP SRCA-1 Межблочный кабель-медь (1м)(80)","code":"В0000036749","dims":"11,0 х 9,0 х 4,0","weight":0.1,"ctn":80},
-{"name":"Провод соединительный AMP SRCA-3 Межблочный кабель-медь (3м)(80)","code":"В0000036750","dims":"11,0 х 9,0 х 4,0","weight":0.2,"ctn":80},
-{"name":"Провод соединительный AMP SRCA-5 Межблочный кабель-медь (5м)(40)","code":"В0000032357","dims":"16,0 х 14,0 х 4,5","weight":0.35,"ctn":40},
-{"name":"Гриль для акустики AMP 5.25 (шт) 13см(160)","code":"В0000050823","dims":"16,0 х 16,0 х 1,5","weight":0.05,"ctn":160},
-{"name":"Гриль для акустики AMP 6.5 (шт) 16,5см(200)","code":"В0000050822","dims":"18,0 х 18,0 х 1,5","weight":0.1,"ctn":200},
-{"name":"Гриль для акустики AMP MG165 (шт) стальной 16,5см(100)","code":"В0000033832","dims":"17,0 х 17,0 х 1,5","weight":0.1,"ctn":100},
-{"name":"Гриль для акустики AMP MG200 (шт) стальной 20см(100)","code":"В0000033833","dims":"21,0 х 21,0 х 1,5","weight":0.1,"ctn":100},
-{"name":"Гриль для акустики AMP MG69 (шт) стальной (100)","code":"В0000050249","dims":"1,5 х 17,0 х 24,0","weight":0.1,"ctn":100},
-{"name":"Гриль для акустики AMP MGH165 (шт) сталь+пластик 17см(100)","code":"В0000036038","dims":"17,0 х 17,0 х 1,0","weight":0.1,"ctn":100},
-{"name":"Гриль для акустики AMP MGH200 (шт) сталь+пластик 20,5см(100)","code":"В0000036039","dims":"21,0 х 21,0 х 1,0","weight":0.1,"ctn":100},
+{"name":"Провод соединительный AMP HRCA-3 Межблочный кабель-медь+2 экрана (3м)(40)","code":"В0000039144","dims":"16,0 х 14,0 х 4,5","weight":0.3,"ctn":40,"ctn_wb":10,"wb_article":"915188399","wb_link":"https://www.wildberries.ru/catalog/915188399/detail.aspx"},
+{"name":"Провод соединительный AMP HRCA-5 Межблочный кабель-медь+2 экрана (5м)(40)","code":"В0000032358","dims":"16,0 х 14,0 х 4,5","weight":0.45,"ctn":40,"ctn_wb":10},
+{"name":"Провод соединительный AMP M-1M2F RCA-Разветвитель 1ПАПА-2МАМА(160)","code":"В0000033981","dims":"3,0 х 7,0 х 14,0","weight":0.03,"ctn":160,"ctn_wb":10,"wb_article":"914528458","wb_link":"https://www.wildberries.ru/catalog/914528458/detail.aspx"},
+{"name":"Провод соединительный AMP M-2M1F RCA-Разветвитель 1МАМА-2ПАПА(160)","code":"В0000033982","dims":"3,0 х 7,0 х 14,0","weight":0.03,"ctn":160,"ctn_wb":10,"wb_article":"912990569","wb_link":"https://www.wildberries.ru/catalog/912990569/detail.aspx"},
+{"name":"Провод соединительный AMP MRCA-1 Межблочный кабель-медь (1м) (20)","code":"В0000033924","dims":"11,0 х 9,0 х 4,0","weight":0.05,"ctn":20,"ctn_wb":10},
+{"name":"Провод соединительный AMP MRCA-2 Межблочный кабель-медь (2м) (20)","code":"В0000033925","dims":"11,0 х 9,0 х 4,0","weight":0.1,"ctn":20,"ctn_wb":10,},
+{"name":"Провод соединительный AMP MRCA-3 Межблочный кабель-медь (3м) (20)","code":"В0000033926","dims":"11,0 х 9,0 х 4,0","weight":0.15,"ctn":20,"ctn_wb":10},
+{"name":"Провод соединительный AMP MRCA-5 Межблочный кабель-медь (5м) (80)","code":"В0000027987","dims":"12,0 х 10,0 х 4,5","weight":0.2,"ctn":80,"ctn_wb":10,"wb_article":"915190308","wb_link":"https://www.wildberries.ru/catalog/915190308/detail.aspx"},
+{"name":"Провод соединительный AMP S-1M2F RCA-Разветвитель 1ПАПА-2МАМА(200)","code":"В0000036971","dims":"3,0 х 7,0 х 14,0","weight":0.05,"ctn":200,"ctn_wb":10},
+{"name":"Провод соединительный AMP S-2M1F RCA-Разветвитель 1МАМА-2ПАПА(200)","code":"В0000036972","dims":"3,0 х 7,0 х 14,0","weight":0.05,"ctn":200,"ctn_wb":10},
+{"name":"Провод соединительный AMP SRCA-1 Межблочный кабель-медь (1м)(80)","code":"В0000036749","dims":"11,0 х 9,0 х 4,0","weight":0.1,"ctn":80,"ctn_wb":10},
+{"name":"Провод соединительный AMP SRCA-3 Межблочный кабель-медь (3м)(80)","code":"В0000036750","dims":"11,0 х 9,0 х 4,0","weight":0.2,"ctn":80,"ctn_wb":10,"wb_article":"892887069","wb_link":"https://www.wildberries.ru/catalog/892887069/detail.aspx"},
+{"name":"Провод соединительный AMP SRCA-5 Межблочный кабель-медь (5м)(40)","code":"В0000032357","dims":"16,0 х 14,0 х 4,5","weight":0.35,"ctn":40,"ctn_wb":10},
+{"name":"Гриль для акустики AMP 5.25 (шт) 13см(160)","code":"В0000050823","dims":"16,0 х 16,0 х 1,5","weight":0.05,"ctn":160,"ctn_wb":10},
+{"name":"Гриль для акустики AMP 6.5 (шт) 16,5см(200)","code":"В0000050822","dims":"18,0 х 18,0 х 1,5","weight":0.1,"ctn":200,"ctn_wb":10,"wb_article":"912979591","wb_link":"https://www.wildberries.ru/catalog/912979591/detail.aspx"},
+{"name":"Гриль для акустики AMP MG165 (шт) стальной 16,5см(100)","code":"В0000033832","dims":"17,0 х 17,0 х 1,5","weight":0.1,"ctn":100,"ctn_wb":10,"wb_article":"876310774","wb_link":"https://www.wildberries.ru/catalog/876310774/detail.aspx"},
+{"name":"Гриль для акустики AMP MG200 (шт) стальной 20см(100)","code":"В0000033833","dims":"21,0 х 21,0 х 1,5","weight":0.1,"ctn":100,"ctn_wb":10,"wb_article":"876317161","wb_link":"https://www.wildberries.ru/catalog/876317161/detail.aspx"},
+{"name":"Гриль для акустики AMP MG69 (шт) стальной (100)","code":"В0000050249","dims":"1,5 х 17,0 х 24,0","weight":0.1,"ctn":100,"ctn_wb":10,"wb_article":"876319193","wb_link":"https://www.wildberries.ru/catalog/876319193/detail.aspx"},
+{"name":"Гриль для акустики AMP MGH165 (шт) сталь+пластик 17см(100)","code":"В0000036038","dims":"17,0 х 17,0 х 1,0","weight":0.1,"ctn":100,"ctn_wb":10,"wb_article":"876314131","wb_link":"https://www.wildberries.ru/catalog/876314131/detail.aspx"},
+{"name":"Гриль для акустики AMP MGH200 (шт) сталь+пластик 20,5см(100)","code":"В0000036039","dims":"21,0 х 21,0 х 1,0","weight":0.1,"ctn":100,"ctn_wb":10,"wb_article":"876324149","wb_link":"https://www.wildberries.ru/catalog/876324149/detail.aspx"},
 {"name":"Сабвуфер корпусной активный AIRTONE SONIX BASS TUBE 10","code":"В0000052360","dims":"31,5 х 51,5 х 33,5","weight":7.3,"ctn":null},
 {"name":"Сабвуфер корпусной активный AIRTONE SONIX BASS TUBE 8","code":"В0000052359","dims":"26,5 х 42,5 х 28,0","weight":4.8,"ctn":null},
 {"name":"Сабвуферный динамик AIRTONE NITRO 300 12D2","code":"В0000052357","dims":"24,0 х 37,0 х 37,0","weight":7.2,"ctn":null},
 {"name":"Сабвуферный динамик AIRTONE NITRO 500 12D2","code":"В0000052358","dims":"24,0 х 37,0 х 37,0","weight":8.1,"ctn":null},
 {"name":"Корпусной сабвуфер AMP MASS 300 12D2 с усилителем и проводами 2.08","code":"В0000051735","dims":"40,0 х 60,0 х 40,0","weight":0.012,"ctn":null},
-{"name":"Сабвуферный динамик AMP MASS 1000 12D2 V.2 (2+2 Ом, rms1000)(1)","code":"В0000050874","dims":"35,5 х 35,5 х 22,5","weight":12.8,"ctn":1},
+{"name":"Сабвуферный динамик AMP MASS 1000 12D2 V.2 (2+2 Ом, rms1000)(1)","code":"В0000050874","dims":"35,5 х 35,5 х 22,5","weight":12.8,"ctn":1,"ctn_wb":1,"wb_article":"866182868","wb_link":"https://www.wildberries.ru/catalog/866182868/detail.aspx"},
 {"name":"Сабвуферный динамик AMP MASS 1000 12D2(2+2 Ом, rms1000)(2)","code":"В0000036163","dims":"25,5 х 37,0 х 36,4","weight":11.43,"ctn":2},
 {"name":"Сабвуферный динамик AMP MASS 1200 15D2(2+2 Ом, rms1200)(2)","code":"В0000036164","dims":"40,0 х 43,0 х 43,0","weight":12.0,"ctn":2},
-{"name":"Сабвуферный динамик AMP MASS 300 10D2 V.2 (2+2 Ом, rms300)(1)","code":"В0000051334","dims":"31,0 х 31,0 х 20,5","weight":6.1,"ctn":1},
-{"name":"Сабвуферный динамик AMP MASS 300 12D2 V.2 (2+2 Ом, rms300)(1)","code":"В0000050875","dims":"35,0 х 35,5 х 22,5","weight":7.2,"ctn":1},
+{"name":"Сабвуферный динамик AMP MASS 300 10D2 V.2 (2+2 Ом, rms300)(1)","code":"В0000051334","dims":"31,0 х 31,0 х 20,5","weight":6.1,"ctn":1,"ctn_wb":1,"wb_article":"866242757","wb_link":"https://www.wildberries.ru/catalog/866242757/detail.aspx"},
+{"name":"Сабвуферный динамик AMP MASS 300 12D2 V.2 (2+2 Ом, rms300)(1)","code":"В0000050875","dims":"35,0 х 35,5 х 22,5","weight":7.2,"ctn":1,"ctn_wb":1,"wb_article":"866242756","wb_link":"https://www.wildberries.ru/catalog/866242756/detail.aspx"},
 {"name":"Сабвуферный динамик AMP MASS 500 10D2 (2+2 Ом, rms500)(2)","code":"В0000050305","dims":"22,0 х 31,5 х 31,5","weight":4.0,"ctn":2},
-{"name":"Сабвуферный динамик AMP MASS 500 10D2 V.2 (2+2 Ом, rms500)(1)","code":"В0000051797","dims":"22,5 х 32,0 х 32,0","weight":7.3,"ctn":1},
-{"name":"Сабвуферный динамик AMP MASS 500 12D2 V.2 (2+2 Ом, rms500)(1)","code":"В0000050876","dims":"21,6 х 35,4 х 35,4","weight":7.0,"ctn":1},
+{"name":"Сабвуферный динамик AMP MASS 500 10D2 V.2 (2+2 Ом, rms500)(1)","code":"В0000051797","dims":"22,5 х 32,0 х 32,0","weight":7.3,"ctn":1,"ctn_wb":1,"wb_article":"866242754","wb_link":"https://www.wildberries.ru/catalog/866242754/detail.aspx"},
+{"name":"Сабвуферный динамик AMP MASS 500 12D2 V.2 (2+2 Ом, rms500)(1)","code":"В0000050876","dims":"21,6 х 35,4 х 35,4","weight":7.0,"ctn":1,"ctn_wb":1,"wb_article":"866242755","wb_link":"https://www.wildberries.ru/catalog/866242755/detail.aspx"},
 {"name":"Сабвуферный динамик AMP MASS 500 12D2(2+2 Ом, rms500)(2)","code":"В0000036166","dims":"22,8 х 35,8 х 35,5","weight":7.63,"ctn":2},
 {"name":"Сабвуферный динамик AMP MASS 500 12D4(4+4 Ом, rms500)(2)","code":"В0000036167","dims":"30,0 х 35,0 х 35,0","weight":5.1,"ctn":2},
-{"name":"Сабвуферный динамик AMP MASS 800 12D2 V.2 (2+2 Ом, rms800)(1)","code":"В0000051331","dims":"35,5 х 35,5 х 22,0","weight":10.2,"ctn":1},
+{"name":"Сабвуферный динамик AMP MASS 800 12D2 V.2 (2+2 Ом, rms800)(1)","code":"В0000051331","dims":"35,5 х 35,5 х 22,0","weight":10.2,"ctn":1,"ctn_wb":1,"wb_article":"866182867","wb_link":"https://www.wildberries.ru/catalog/866182867/detail.aspx"},
 {"name":"Сабвуферный динамик AMP MASS 800 12D2(2+2 Ом, rms800)(2)","code":"В0000036161","dims":"24,4 х 37,0 х 36,4","weight":9.38,"ctn":2},
-{"name":"Сабвуферный динамик AMP MASS 800 15D2 V.2 (2+2 Ом, rms800)(1)","code":"В0000051921","dims":"44,0 х 44,0 х 28,0","weight":11.8,"ctn":1},
-{"name":"Сабвуферный динамик AMP PROMO 150 104 V.2 (4 Ом, rms150) (2)","code":"В0000051311","dims":"15,0 х 26,0 х 26,0","weight":2.95,"ctn":2},
-{"name":"Сабвуферный динамик AMP PROMO 150 124 V.2 (4 Ом, rms150)(2)","code":"В0000041800","dims":"34,5 х 35,0 х 16,5","weight":2.9,"ctn":2},
+{"name":"Сабвуферный динамик AMP MASS 800 15D2 V.2 (2+2 Ом, rms800)(1)","code":"В0000051921","dims":"44,0 х 44,0 х 28,0","weight":11.8,"ctn":1,"ctn_wb":1,"wb_article":"866242758","wb_link":"https://www.wildberries.ru/catalog/866242758/detail.aspx"},
+{"name":"Сабвуферный динамик AMP PROMO 150 104 V.2 (4 Ом, rms150) (2)","code":"В0000051311","dims":"15,0 х 26,0 х 26,0","weight":2.95,"ctn":2,"ctn_wb":2,"wb_article":"865662250","wb_link":"https://www.wildberries.ru/catalog/865662250/detail.aspx"},
+{"name":"Сабвуферный динамик AMP PROMO 150 124 V.2 (4 Ом, rms150)(2)","code":"В0000041800","dims":"34,5 х 35,0 х 16,5","weight":2.9,"ctn":2,"ctn_wb":2,"wb_article":"850819515","wb_link":"https://www.wildberries.ru/catalog/850819515/detail.aspx"},
 {"name":"Сабвуферный динамик AMP RAID 150 104 (4 Ом, rms150)(2)","code":"В0000051312","dims":"15,0 х 29,0 х 29,0","weight":2.6,"ctn":2},
 {"name":"Сабвуферный динамик AMP RAID 150 124 (4 Ом, rms150)(2)","code":"В0000045347","dims":"1,5 х 3,1 х 3,1","weight":3.0,"ctn":2},
 {"name":"Сабвуферный динамик AMP Калибр Sport 4000 15D1 (1+1 Ом) (RMS 4000W)","code":"В0000047918","dims":"4,5 х 4,5 х 4,5","weight":40.0,"ctn":null},
@@ -784,56 +864,56 @@ const PRODUCTS_RAW = [
 {"name":"Усилитель AIRTONE SONIX 2.50","code":"В0000052502","dims":"4,9 х 23,3 х 20,2","weight":0,"ctn":null},
 {"name":"Усилитель AIRTONE SONIX 4.50","code":"В0000052503","dims":"4,9 х 34,3 х 20,2","weight":0,"ctn":null},
 {"name":"Усилитель AMP ANDROID 4.60(20)","code":"В0000052286","dims":"14,0 х 6,0 х 14,5","weight":0.75,"ctn":20},
-{"name":"Усилитель AMP MASS 1.1000 (6)","code":"В0000035192","dims":"33,0 х 19,5 х 8,0","weight":2.35,"ctn":6},
-{"name":"Усилитель AMP MASS 1.1500 (5)","code":"В0000035194","dims":"39,0 х 19,9 х 8,0","weight":3.05,"ctn":5},
-{"name":"Усилитель AMP MASS 1.500 ver.2(6)","code":"В0000038134","dims":"27,0 х 19,9 х 8,0","weight":1.8,"ctn":6},
+{"name":"Усилитель AMP MASS 1.1000 (6)","code":"В0000035192","dims":"33,0 х 19,5 х 8,0","weight":2.35,"ctn":6,"ctn_wb":6,"wb_article":"865813172","wb_link":"https://www.wildberries.ru/catalog/865813172/detail.aspx"},
+{"name":"Усилитель AMP MASS 1.1500 (5)","code":"В0000035194","dims":"39,0 х 19,9 х 8,0","weight":3.05,"ctn":5,"ctn_wb":5,"wb_article":"865813171","wb_link":"https://www.wildberries.ru/catalog/865813171/detail.aspx"},
+{"name":"Усилитель AMP MASS 1.500 ver.2(6)","code":"В0000038134","dims":"27,0 х 19,9 х 8,0","weight":1.8,"ctn":6,"ctn_wb":6,"wb_article":"850085761","wb_link":"https://www.wildberries.ru/catalog/850085761/detail.aspx"},
 {"name":"Усилитель AMP MASS 1.500(8)","code":"В0000028363","dims":"11,0 х 23,0 х 25,0","weight":3.0,"ctn":8},
-{"name":"Усилитель AMP MASS 1.600 (6)","code":"В0000038135","dims":"29,0 х 19,9 х 8,0","weight":1.9,"ctn":6},
-{"name":"Усилитель AMP MASS 1.800(6)","code":"В0000035191","dims":"31,0 х 19,9 х 8,0","weight":2.05,"ctn":6},
-{"name":"Усилитель AMP MASS 2.100(8)","code":"В0000035184","dims":"31,0 х 19,9 х 8,0","weight":1.95,"ctn":8},
+{"name":"Усилитель AMP MASS 1.600 (6)","code":"В0000038135","dims":"29,0 х 19,9 х 8,0","weight":1.9,"ctn":6,"ctn_wb":6,"wb_article":"865813174","wb_link":"https://www.wildberries.ru/catalog/865813174/detail.aspx"},
+{"name":"Усилитель AMP MASS 1.800(6)","code":"В0000035191","dims":"31,0 х 19,9 х 8,0","weight":2.05,"ctn":6,"ctn_wb":6,"wb_article":"865813173","wb_link":"https://www.wildberries.ru/catalog/865813173/detail.aspx"},
+{"name":"Усилитель AMP MASS 2.100(8)","code":"В0000035184","dims":"31,0 х 19,9 х 8,0","weight":1.95,"ctn":8,"ctn_wb":8,"wb_article":"850098925","wb_link":"https://www.wildberries.ru/catalog/850098925/detail.aspx"},
 {"name":"Усилитель AMP MASS 2.120(6)","code":"В0000028366","dims":"11,0 х 33,0 х 25,0","weight":4.0,"ctn":6},
-{"name":"Усилитель AMP MASS 2.150 (6)","code":"В0000035185","dims":"35,0 х 19,9 х 8,0","weight":2.3,"ctn":6},
-{"name":"Усилитель AMP MASS 2.190 (6)","code":"М0000002762","dims":"37,0 х 19,9 х 8,0","weight":2.45,"ctn":6},
-{"name":"Усилитель AMP MASS 2.60(8)","code":"В0000035182","dims":"27,0 х 19,9 х 8,0","weight":1.7,"ctn":8},
+{"name":"Усилитель AMP MASS 2.150 (6)","code":"В0000035185","dims":"35,0 х 19,9 х 8,0","weight":2.3,"ctn":6,"ctn_wb":6,"wb_article":"850104927","wb_link":"https://www.wildberries.ru/catalog/850104927/detail.aspx"},
+{"name":"Усилитель AMP MASS 2.190 (6)","code":"М0000002762","dims":"37,0 х 19,9 х 8,0","weight":2.45,"ctn":6,"ctn_wb":6,"wb_article":"865773756","wb_link":"https://www.wildberries.ru/catalog/865773756/detail.aspx"},
+{"name":"Усилитель AMP MASS 2.60(8)","code":"В0000035182","dims":"27,0 х 19,9 х 8,0","weight":1.7,"ctn":8,"ctn_wb":8,"wb_article":"865773757","wb_link":"https://www.wildberries.ru/catalog/865773757/detail.aspx"},
 {"name":"Усилитель AMP MASS 2.80(6)","code":"В0000035183","dims":"11,0 х 27,0 х 25,0","weight":2.5,"ctn":6},
-{"name":"Усилитель AMP MASS 4.100(6)","code":"В0000035188","dims":"39,0 х 19,7 х 8,0","weight":2.4,"ctn":6},
-{"name":"Усилитель AMP MASS 4.120(4)","code":"В0000035189","dims":"45,0 х 19,9 х 8,0","weight":2.95,"ctn":4},
-{"name":"Усилитель AMP MASS 4.150(4)","code":"В0000042792","dims":"46,8 х 19,9 х 8,0","weight":3.2,"ctn":4},
-{"name":"Усилитель AMP MASS 4.190(4)","code":"В0000042793","dims":"49,0 х 19,9 х 8,0","weight":3.5,"ctn":4},
-{"name":"Усилитель AMP MASS 4.60 (6)","code":"В0000035186","dims":"35,0 х 19,9 х 8,0","weight":2.15,"ctn":6},
-{"name":"Усилитель AMP MASS 4.80 (6)","code":"В0000035187","dims":"37,0 х 19,8 х 8,0","weight":2.25,"ctn":6},
-{"name":"Усилитель AMP MICRON 1.500(15)","code":"В0000048490","dims":"24,5 х 16,0 х 6,8","weight":1.0,"ctn":15},
-{"name":"Усилитель AMP MICRON 1.800(10)","code":"В0000050303","dims":"28,3 х 16,0 х 6,8","weight":1.25,"ctn":10},
-{"name":"Усилитель AMP MICRON 2.170(10)","code":"В0000050304","dims":"26,2 х 16,0 х 6,8","weight":1.1,"ctn":10},
-{"name":"Усилитель AMP MICRON 4.100 (10)","code":"В0000050177","dims":"24,5 х 12,5 х 6,8","weight":1.0,"ctn":10},
-{"name":"Усилитель AMP MICRON 4.120(10)","code":"В0000050178","dims":"28,5 х 12,5 х 6,8","weight":1.15,"ctn":10},
-{"name":"Усилитель AMP MICRON 4.80(15)","code":"В0000048590","dims":"23,0 х 12,5 х 6,8","weight":0.9,"ctn":15},
+{"name":"Усилитель AMP MASS 4.100(6)","code":"В0000035188","dims":"39,0 х 19,7 х 8,0","weight":2.4,"ctn":6,"ctn_wb":6,"wb_article":"822536174","wb_link":"https://www.wildberries.ru/catalog/822536174/detail.aspx"},
+{"name":"Усилитель AMP MASS 4.120(4)","code":"В0000035189","dims":"45,0 х 19,9 х 8,0","weight":2.95,"ctn":4,"ctn_wb":4,"wb_article":"850114790","wb_link":"https://www.wildberries.ru/catalog/850114790/detail.aspx"},
+{"name":"Усилитель AMP MASS 4.150(4)","code":"В0000042792","dims":"46,8 х 19,9 х 8,0","weight":3.2,"ctn":4,"ctn_wb":4,"wb_article":"865871862","wb_link":"https://www.wildberries.ru/catalog/865871862/detail.aspx"},
+{"name":"Усилитель AMP MASS 4.190(4)","code":"В0000042793","dims":"49,0 х 19,9 х 8,0","weight":3.5,"ctn":4,"ctn_wb":4,"wb_article":"865871861","wb_link":"https://www.wildberries.ru/catalog/865871861/detail.aspx"},
+{"name":"Усилитель AMP MASS 4.60 (6)","code":"В0000035186","dims":"35,0 х 19,9 х 8,0","weight":2.15,"ctn":6,"ctn_wb":6,"wb_article":"865863011","wb_link":"https://www.wildberries.ru/catalog/865863011/detail.aspx"},
+{"name":"Усилитель AMP MASS 4.80 (6)","code":"В0000035187","dims":"37,0 х 19,8 х 8,0","weight":2.25,"ctn":6,"ctn_wb":6,"wb_article":"865871860","wb_link":"https://www.wildberries.ru/catalog/865871860/detail.aspx"},
+{"name":"Усилитель AMP MICRON 1.500(15)","code":"В0000048490","dims":"24,5 х 16,0 х 6,8","weight":1.0,"ctn":15,"ctn_wb":15,"wb_article":"865813175","wb_link":"https://www.wildberries.ru/catalog/865813175/detail.aspx"},
+{"name":"Усилитель AMP MICRON 1.800(10)","code":"В0000050303","dims":"28,3 х 16,0 х 6,8","weight":1.25,"ctn":10,"ctn_wb":10,"wb_article":"865778887","wb_link":"https://www.wildberries.ru/catalog/865778887/detail.aspx"},
+{"name":"Усилитель AMP MICRON 2.170(10)","code":"В0000050304","dims":"26,2 х 16,0 х 6,8","weight":1.1,"ctn":10,"ctn_wb":10,"wb_article":"865750089","wb_link":"https://www.wildberries.ru/catalog/865750089/detail.aspx"},
+{"name":"Усилитель AMP MICRON 4.100 (10)","code":"В0000050177","dims":"24,5 х 12,5 х 6,8","weight":1.0,"ctn":10,"ctn_wb":10,"wb_article":"865863012","wb_link":"https://www.wildberries.ru/catalog/865863012/detail.aspx"},
+{"name":"Усилитель AMP MICRON 4.120(10)","code":"В0000050178","dims":"28,5 х 12,5 х 6,8","weight":1.15,"ctn":10,"ctn_wb":10,"wb_article":"865750088","wb_link":"https://www.wildberries.ru/catalog/865750088/detail.aspx"},
+{"name":"Усилитель AMP MICRON 4.80(15)","code":"В0000048590","dims":"23,0 х 12,5 х 6,8","weight":0.9,"ctn":15,"ctn_wb":15,"wb_article":"865750087","wb_link":"https://www.wildberries.ru/catalog/865750087/detail.aspx"},
 {"name":"Усилитель AMP POWER 1.1200(4)","code":"В0000036867","dims":"11,0 х 37,0 х 25,0","weight":4.0,"ctn":4},
 {"name":"Усилитель AMP POWER 1.1500(3)","code":"М0000003102","dims":"11,0 х 39,0 х 25,0","weight":3.0,"ctn":3},
 {"name":"Усилитель AMP POWER 4.120(4)","code":"М0000003100","dims":"11,0 х 39,0 х 25,0","weight":5.5,"ctn":4},
 {"name":"Усилитель AMP POWER 4.150(3)","code":"В0000035190","dims":"11,0 х 43,0 х 25,0","weight":5.5,"ctn":3},
 {"name":"Усилитель AMP PRO 1.1000(6)","code":"В0000036176","dims":"7,5 х 32,6 х 21,6","weight":2.42,"ctn":6},
-{"name":"Усилитель AMP PRO 1.1000FR(6)","code":"В0000051690","dims":"32,2 х 21,5 х 7,5","weight":2.4,"ctn":6},
+{"name":"Усилитель AMP PRO 1.1000FR(6)","code":"В0000051690","dims":"32,2 х 21,5 х 7,5","weight":2.4,"ctn":6,"ctn_wb":6,"wb_article":"865844886","wb_link":"https://www.wildberries.ru/catalog/865844886/detail.aspx"},
 {"name":"Усилитель AMP PRO 1.1250(6)","code":"В0000037478","dims":"11,0 х 35,0 х 17,0","weight":3.0,"ctn":6},
 {"name":"Усилитель AMP PRO 1.1500(6)","code":"В0000037479","dims":"7,5 х 36,5 х 21,5","weight":2.78,"ctn":6},
-{"name":"Усилитель AMP PRO 1.1500FR(6)","code":"В0000051768","dims":"36,0 х 21,5 х 7,5","weight":2.7,"ctn":6},
+{"name":"Усилитель AMP PRO 1.1500FR(6)","code":"В0000051768","dims":"36,0 х 21,5 х 7,5","weight":2.7,"ctn":6,"ctn_wb":6,"wb_article":"865844887","wb_link":"https://www.wildberries.ru/catalog/865844887/detail.aspx"},
 {"name":"Усилитель AMP PRO 1.2000 (4)","code":"В0000038137","dims":"7,5 х 40,5 х 21,5","weight":3.23,"ctn":4},
-{"name":"Усилитель AMP PRO 1.2000FR (4)","code":"В0000051769","dims":"40,3 х 21,5 х 7,5","weight":3.2,"ctn":4},
-{"name":"Усилитель AMP PRO 1.500(10)","code":"В0000039610","dims":"24,5 х 21,5 х 7,5","weight":1.7,"ctn":10},
-{"name":"Усилитель AMP PRO 1.600(8)","code":"В0000036174","dims":"28,5 х 21,5 х 7,5","weight":2.0,"ctn":8},
-{"name":"Усилитель AMP PRO 1.800(6)","code":"В0000036175","dims":"30,4 х 21,5 х 7,5","weight":2.15,"ctn":6},
+{"name":"Усилитель AMP PRO 1.2000FR (4)","code":"В0000051769","dims":"40,3 х 21,5 х 7,5","weight":3.2,"ctn":4,"ctn_wb":4,"wb_article":"865844888","wb_link":"https://www.wildberries.ru/catalog/865844888/detail.aspx"},
+{"name":"Усилитель AMP PRO 1.500(10)","code":"В0000039610","dims":"24,5 х 21,5 х 7,5","weight":1.7,"ctn":10,"ctn_wb":10,"wb_article":"865844889","wb_link":"https://www.wildberries.ru/catalog/865844889/detail.aspx"},
+{"name":"Усилитель AMP PRO 1.600(8)","code":"В0000036174","dims":"28,5 х 21,5 х 7,5","weight":2.0,"ctn":8,"ctn_wb":8,"wb_article":"865844885","wb_link":"https://www.wildberries.ru/catalog/865844885/detail.aspx"},
+{"name":"Усилитель AMP PRO 1.800(6)","code":"В0000036175","dims":"30,4 х 21,5 х 7,5","weight":2.15,"ctn":6,"ctn_wb":6,"wb_article":"822553947","wb_link":"https://www.wildberries.ru/catalog/822553947/detail.aspx"},
 {"name":"Усилитель AMP PRO 2.200(8)","code":"В0000036173","dims":"28,0 х 16,5 х 7,5","weight":1.8,"ctn":8},
 {"name":"Усилитель AMP PRO 4.100(6)","code":"В0000038136","dims":"7,5 х 26,5 х 16,5","weight":1.71,"ctn":6},
-{"name":"Усилитель AMP PRO 4.100FR(6)","code":"В0000051770","dims":"26,5 х 16,5 х 7,5","weight":1.65,"ctn":6},
-{"name":"Усилитель AMP PRO 4.120(6)","code":"В0000035661","dims":"7,5 х 30,5 х 16,5","weight":2.03,"ctn":6},
-{"name":"Усилитель AMP PRO 4.120FR(6)","code":"В0000051771","dims":"30,5 х 16,5 х 7,5","weight":2.0,"ctn":6},
+{"name":"Усилитель AMP PRO 4.100FR(6)","code":"В0000051770","dims":"26,5 х 16,5 х 7,5","weight":1.65,"ctn":6,"ctn_wb":6,"wb_article":"863539466","wb_link":"https://www.wildberries.ru/catalog/863539466/detail.aspx"},
+{"name":"Усилитель AMP PRO 4.120(6)","code":"В0000035661","dims":"7,5 х 30,5 х 16,5","weight":2.03,"ctn":6,"ctn_wb":6},
+{"name":"Усилитель AMP PRO 4.120FR(6)","code":"В0000051771","dims":"30,5 х 16,5 х 7,5","weight":2.0,"ctn":6,"ctn_wb":6,"wb_article":"865750090","wb_link":"https://www.wildberries.ru/catalog/865750090/detail.aspx"},
 {"name":"Усилитель AMP PRO 4.150(6)","code":"В0000036172","dims":"7,5 х 32,5 х 16,5","weight":2.15,"ctn":6},
-{"name":"Усилитель AMP PRO 4.150FR(6)","code":"В0000051772","dims":"32,5 х 16,5 х 7,5","weight":2.15,"ctn":6},
+{"name":"Усилитель AMP PRO 4.150FR(6)","code":"В0000051772","dims":"32,5 х 16,5 х 7,5","weight":2.15,"ctn":6,"ctn_wb":6,"wb_article":"865750091","wb_link":"https://www.wildberries.ru/catalog/865750091/detail.aspx"},
 {"name":"Усилитель AMP PRO 4.200(6)","code":"М0000003101","dims":"7,5 х 34,5 х 16,5","weight":2.41,"ctn":6},
-{"name":"Усилитель AMP PRO 4.200FR (6)","code":"В0000050351","dims":"34,0 х 16,5 х 7,5","weight":2.35,"ctn":6},
+{"name":"Усилитель AMP PRO 4.200FR (6)","code":"В0000050351","dims":"34,0 х 16,5 х 7,5","weight":2.35,"ctn":6,"ctn_wb":6,"wb_article":"865706016","wb_link":"https://www.wildberries.ru/catalog/865706016/detail.aspx"},
 {"name":"Усилитель AMP PRO 4.300(6)","code":"В0000036603","dims":"10,0 х 38,0 х 18,0","weight":3.0,"ctn":6},
-{"name":"Усилитель AMP PRO 4.300FR (6)","code":"В0000050352","dims":"38,5 х 16,5 х 7,5","weight":2.7,"ctn":6},
-{"name":"Усилитель AMP PRO 4.400FR (4)","code":"В0000050353","dims":"40,0 х 16,5 х 7,5","weight":3.0,"ctn":4},
+{"name":"Усилитель AMP PRO 4.300FR (6)","code":"В0000050352","dims":"38,5 х 16,5 х 7,5","weight":2.7,"ctn":6,"ctn_wb":6,"wb_article":"865706017","wb_link":"https://www.wildberries.ru/catalog/865706017/detail.aspx"},
+{"name":"Усилитель AMP PRO 4.400FR (4)","code":"В0000050353","dims":"40,0 х 16,5 х 7,5","weight":3.0,"ctn":4,"ctn_wb":4,"wb_article":"865750086","wb_link":"https://www.wildberries.ru/catalog/865750086/detail.aspx"},
 {"name":"Усилитель AMP RAGE 2.300(5) 1Ом","code":"В0000037154","dims":"10,0 х 23,0 х 19,0","weight":3.5,"ctn":5},
 {"name":"Усилитель AMP RAGE 4.300(5) 1Ом","code":"В0000037153","dims":"10,0 х 29,0 х 19,0","weight":4.5,"ctn":5},
 {"name":"Усилитель AMP RAGE 6.250(5) 2Ом","code":"В0000037155","dims":"10,0 х 33,0 х 19,0","weight":5.0,"ctn":5},
@@ -843,44 +923,44 @@ const PRODUCTS_RAW = [
 {"name":"Усилитель AMP Калибр 1.5000FR (3)","code":"В0000034867","dims":"11,5 х 53,8 х 26,5","weight":6.07,"ctn":3},
 {"name":"Усилитель AMP Калибр 2.1000FRS (4)","code":"В0000039968","dims":"11,5 х 40,0 х 26,7","weight":3.63,"ctn":4},
 {"name":"Усилитель AMP Калибр 2.1700FRS (3)","code":"В0000034868","dims":"11,8 х 52,8 х 26,5","weight":5.87,"ctn":3},
-{"name":"Светодиод габаритный AMP 360 SuperBright T10 (ШТ)","code":"В0000046812","dims":"9,5 х 7,0 х 1,5","weight":0.15,"ctn":null},
+{"name":"Светодиод габаритный AMP 360 SuperBright T10 (ШТ)","code":"В0000046812","dims":"9,5 х 7,0 х 1,5","weight":0.15,"ctn":null,"ctn_wb":10},
 {"name":"Светодиод габаритный AMP PRO SuperBright T10 360(ШТ) (БРАК НЕ ПРОДАВАТЬ)","code":"В0000046813","dims":"3,0 х 5,0 х 5,0","weight":0.15,"ctn":null},
-{"name":"Светодиод габаритный AMP/Criolight 360 StandartBright T10 (ШТ)","code":"В0000032533","dims":"9,5 х 7,0 х 1,5","weight":0.1,"ctn":null},
-{"name":"Светодиод габаритный AMP/Criolight PRO 360 SuperBright T10(ШТ)","code":"В0000048019","dims":"9,5 х 7,0 х 1,5","weight":0.15,"ctn":null},
-{"name":"Светодиод габаритный AMP/Criolight StandartBright T10 (ШТ)","code":"В0000032532","dims":"9,5 х 7,0 х 1,5","weight":0.1,"ctn":null},
-{"name":"Светодиод габаритный AMP/Criolight SuperBright T10 CANBUS (ШТ)","code":"М0000002734","dims":"9,5 х 7,0 х 1,5","weight":0.1,"ctn":null},
-{"name":"Светодиод головного света AMP/Criolight CSP H02s D2 ШТ","code":"В0000039450","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP H02s H1 ШТ","code":"В0000039451","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP H02s H11 ШТ","code":"В0000039455","dims":"4,5 х 4,5 х 9,0","weight":0.1,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP H02s H27 ШТ","code":"В0000039458","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP H02s H3 ШТ","code":"В0000039452","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP H02s H4 ШТ","code":"В0000039453","dims":"4,5 х 4,5 х 9,0","weight":0.1,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP H02s H7 ШТ","code":"В0000039454","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP H02s HB3 ШТ","code":"В0000039456","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP H02s HB4 ШТ","code":"В0000039457","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L03s H1 ШТ","code":"В0000039443","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L03s H11 ШТ","code":"В0000039447","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L03s H27 ШТ","code":"В0000039459","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L03s H3 ШТ","code":"В0000039444","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L03s H4 ШТ","code":"В0000039445","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L03s H7 ШТ","code":"В0000039446","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L03s HB3 ШТ","code":"В0000039448","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L03s HB4 ШТ","code":"В0000039449","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L04S H1 ШТ","code":"В0000028133","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L04S H11 ШТ","code":"В0000027959","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L04S H3 ШТ","code":"В0000023943","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L04S H4 ШТ","code":"В0000027185","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L04S H7 ШТ","code":"В0000027186","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L04S HB3 ШТ","code":"В0000027956","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP L04S HB4 ШТ","code":"В0000027958","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight CSP mini projector lens H4 (ШТ)","code":"В0000049486","dims":"14,0 х 11,0 х 5,5","weight":0.3,"ctn":null},
+{"name":"Светодиод габаритный AMP/Criolight 360 StandartBright T10 (ШТ)","code":"В0000032533","dims":"9,5 х 7,0 х 1,5","weight":0.1,"ctn":null,"ctn_wb":10},
+{"name":"Светодиод габаритный AMP/Criolight PRO 360 SuperBright T10(ШТ)","code":"В0000048019","dims":"9,5 х 7,0 х 1,5","weight":0.15,"ctn":null,"ctn_wb":10,"wb_article":"822644405","wb_link":"https://www.wildberries.ru/catalog/822644405/detail.aspx"},
+{"name":"Светодиод габаритный AMP/Criolight StandartBright T10 (ШТ)","code":"В0000032532","dims":"9,5 х 7,0 х 1,5","weight":0.1,"ctn":null,"ctn_wb":10,"wb_article":"822646411","wb_link":"https://www.wildberries.ru/catalog/822646411/detail.aspx"},
+{"name":"Светодиод габаритный AMP/Criolight SuperBright T10 CANBUS (ШТ)","code":"М0000002734","dims":"9,5 х 7,0 х 1,5","weight":0.1,"ctn":null,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP H02s D2 ШТ","code":"В0000039450","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP H02s H1 ШТ","code":"В0000039451","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP H02s H11 ШТ","code":"В0000039455","dims":"4,5 х 4,5 х 9,0","weight":0.1,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP H02s H27 ШТ","code":"В0000039458","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP H02s H3 ШТ","code":"В0000039452","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP H02s H4 ШТ","code":"В0000039453","dims":"4,5 х 4,5 х 9,0","weight":0.1,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP H02s H7 ШТ","code":"В0000039454","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP H02s HB3 ШТ","code":"В0000039456","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP H02s HB4 ШТ","code":"В0000039457","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L03s H1 ШТ","code":"В0000039443","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L03s H11 ШТ","code":"В0000039447","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L03s H27 ШТ","code":"В0000039459","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L03s H3 ШТ","code":"В0000039444","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L03s H4 ШТ","code":"В0000039445","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L03s H7 ШТ","code":"В0000039446","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L03s HB3 ШТ","code":"В0000039448","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L03s HB4 ШТ","code":"В0000039449","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L04S H1 ШТ","code":"В0000028133","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L04S H11 ШТ","code":"В0000027959","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L04S H3 ШТ","code":"В0000023943","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L04S H4 ШТ","code":"В0000027185","dims":"4,5 х 4,5 х 9,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L04S H7 ШТ","code":"В0000027186","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L04S HB3 ШТ","code":"В0000027956","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP L04S HB4 ШТ","code":"В0000027958","dims":"4,5 х 4,5 х 9,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight CSP mini projector lens H4 (ШТ)","code":"В0000049486","dims":"14,0 х 11,0 х 5,5","weight":0.3,"ctn":null,"ctn_wb":10},
 {"name":"Светодиод головного света AMP/Criolight PRO CSP H1(ШТ)","code":"М0000002831","dims":"9,0 х 4,5 х 5,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight PRO CSP H11(ШТ)","code":"М0000002835","dims":"9,0 х 4,5 х 5,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight PRO CSP H3(ШТ)","code":"М0000002832","dims":"9,0 х 4,5 х 5,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight PRO CSP H4(ШТ)","code":"М0000002833","dims":"11,0 х 6,0 х 5,0","weight":0.05,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight PRO CSP H7/ H18 (ШТ)","code":"М0000002834","dims":"9,0 х 4,5 х 5,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight PRO CSP HB3 (ШТ)","code":"М0000002836","dims":"9,0 х 4,5 х 5,0","weight":0.03,"ctn":100},
-{"name":"Светодиод головного света AMP/Criolight PRO CSP HB4 (ШТ)","code":"М0000002837","dims":"9,0 х 4,5 х 5,0","weight":0.05,"ctn":100},
+{"name":"Светодиод головного света AMP/Criolight PRO CSP H11(ШТ)","code":"М0000002835","dims":"9,0 х 4,5 х 5,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight PRO CSP H3(ШТ)","code":"М0000002832","dims":"9,0 х 4,5 х 5,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight PRO CSP H4(ШТ)","code":"М0000002833","dims":"11,0 х 6,0 х 5,0","weight":0.05,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight PRO CSP H7/ H18 (ШТ)","code":"М0000002834","dims":"9,0 х 4,5 х 5,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight PRO CSP HB3 (ШТ)","code":"М0000002836","dims":"9,0 х 4,5 х 5,0","weight":0.03,"ctn":100,"ctn_wb":10},
+{"name":"Светодиод головного света AMP/Criolight PRO CSP HB4 (ШТ)","code":"М0000002837","dims":"9,0 х 4,5 х 5,0","weight":0.05,"ctn":100,"ctn_wb":10},
 {"name":"Светодиод головного света Criolight C7 H1 ШТ","code":"В0000027195","dims":"4,0 х 9,0 х 4,0","weight":0.1,"ctn":100},
 {"name":"Светодиод головного света Criolight C7 H11 ШТ","code":"В0000038841","dims":"4,0 х 9,0 х 4,0","weight":0.1,"ctn":100},
 {"name":"Светодиод головного света Criolight C7 H3 ШТ","code":"В0000027193","dims":"4,0 х 9,0 х 4,0","weight":0.1,"ctn":100},
@@ -889,9 +969,9 @@ const PRODUCTS_RAW = [
 {"name":"Светодиод головного света Criolight C7 HB3 ШТ","code":"В0000038842","dims":"4,0 х 9,0 х 4,0","weight":0.1,"ctn":100},
 {"name":"Светодиод головного света Criolight C7 HB4 ШТ","code":"В0000038843","dims":"4,0 х 9,0 х 4,0","weight":0.1,"ctn":100},
 {"name":"Светодиод с функцией поворотника AMP Superbright 2in1 Universal (комп) (50)","code":"В0000042249","dims":"5,0 х 18,0 х 12,0","weight":0.304,"ctn":50},
-{"name":"Светодиод салонный AMP/Criolight StandartBright C5W(31mm) ШТ","code":"М0000002735","dims":"9,5 х 7,0 х 1,5","weight":0.01,"ctn":null},
-{"name":"Светодиод салонный AMP/Criolight StandartBright C5W(36mm) ШТ","code":"В0000032528","dims":"9,5 х 7,0 х 1,5","weight":0.01,"ctn":null},
-{"name":"Светодиод салонный AMP/Criolight StandartBright C5W(41mm) ШТ","code":"В0000032529","dims":"9,5 х 7,0 х 1,5","weight":0.01,"ctn":null},
+{"name":"Светодиод салонный AMP/Criolight StandartBright C5W(31mm) ШТ","code":"М0000002735","dims":"9,5 х 7,0 х 1,5","weight":0.01,"ctn":null,"ctn_wb":10},
+{"name":"Светодиод салонный AMP/Criolight StandartBright C5W(36mm) ШТ","code":"В0000032528","dims":"9,5 х 7,0 х 1,5","weight":0.01,"ctn":null,"ctn_wb":10},
+{"name":"Светодиод салонный AMP/Criolight StandartBright C5W(41mm) ШТ","code":"В0000032529","dims":"9,5 х 7,0 х 1,5","weight":0.01,"ctn":null,"ctn_wb":10},
 {"name":"Камера заднего вида AMP HD-001(AHD/CVBS,160,mirror and parking line control)(20)","code":"В0000046819","dims":"5,0 х 19,0 х 7,0","weight":0.5,"ctn":20},
 {"name":"Камера заднего вида AMP HD-002BUS(AHD/CVBS,160,mirror and parking line control)(провод в комплекте)(30)","code":"В0000034165","dims":"5,0 х 12,0 х 7,0","weight":0.5,"ctn":30},
 {"name":"Камера универсальная AMP HD-02(AHD/CVBS,160,mirror and parking line control)(50)","code":"В0000046816","dims":"5,0 х 13,0 х 8,0","weight":0.5,"ctn":50},
@@ -936,6 +1016,584 @@ function switchTab(name) {
   document.getElementById('tab-' + name).classList.add('active');
   if (name === 'history') renderHistory();
   if (name === 'catalog') renderCatalogTable();
+  if (name === 'wb') initWbTab();
+}
+
+// ===== WB ORDER =====
+let wbCart = {}; // code -> qty
+let wbCatFilter = 'all';
+
+function initWbTab() {
+  renderWbSidebar();
+  renderWbCart();
+}
+
+function renderWbSidebar() {
+  const q = (document.getElementById('wbSidebarSearch')?.value || '').toLowerCase().trim();
+  // Only show products that have ctn_wb
+  const wbProducts = PRODUCTS.filter(p => p.ctn_wb && p.ctn_wb > 0);
+  
+  // Build categories from available WB products
+  const cats = new Set(wbProducts.map(p => {
+    if (p.name.includes('Усилитель')) return 'Усилители';
+    if (p.name.includes('Акустика')) return 'Акустика';
+    if (p.name.includes('Сабвуфер')) return 'Сабвуферы';
+    if (p.name.includes('Провод') || p.name.includes('Кабель')) return 'Провода';
+    if (p.name.includes('Светодиод')) return 'Светодиоды';
+    return 'Прочее';
+  }));
+  
+  const catEl = document.getElementById('wbCategoryTabs');
+  const allCats = ['all', ...cats];
+  catEl.innerHTML = allCats.map(c =>
+    `<button class="cat-tab ${c===wbCatFilter?'active':''}" onclick="wbSetCat('${c}')">${c==='all'?'Все':c}</button>`
+  ).join('');
+
+  let list = wbProducts;
+  if (wbCatFilter !== 'all') {
+    list = list.filter(p => {
+      if (wbCatFilter === 'Усилители') return p.name.includes('Усилитель');
+      if (wbCatFilter === 'Акустика') return p.name.includes('Акустика');
+      if (wbCatFilter === 'Сабвуферы') return p.name.includes('Сабвуфер');
+      if (wbCatFilter === 'Провода') return p.name.includes('Провод') || p.name.includes('Кабель');
+      if (wbCatFilter === 'Светодиоды') return p.name.includes('Светодиод');
+      return !['Усилитель','Акустика','Сабвуфер','Провод','Кабель','Светодиод'].some(k => p.name.includes(k));
+    });
+  }
+  if (q) list = list.filter(p => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q));
+
+  const listEl = document.getElementById('wbProductList');
+  listEl.innerHTML = list.map(p => {
+    const qty = wbCart[p.code] || 0;
+    const inCart = qty > 0;
+    return `<div class="product-item${inCart?' in-cart':''}" onclick="wbCartAdd('${p.code}')">
+      <div class="p-name">${p.name}</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+        <span style="font-size:10px;color:#a78bfa">ВБ кор: ${p.ctn_wb}${p.wb_article?' · <a href="'+p.wb_link+'" target="_blank" onclick="event.stopPropagation()" style="color:#a78bfa;text-decoration:underline">'+p.wb_article+'</a>':''}</span>
+        ${inCart
+          ? `<div style="display:flex;align-items:center;gap:4px">
+               <button class="p-qty-btn" onclick="event.stopPropagation();wbCartSet('${p.code}',${qty-p.ctn_wb})">−</button>
+               <span style="font-size:12px;font-weight:600;min-width:28px;text-align:center">${qty}</span>
+               <button class="p-qty-btn" onclick="event.stopPropagation();wbCartSet('${p.code}',${qty+p.ctn_wb})">+</button>
+             </div>`
+          : `<button class="p-add-btn" onclick="event.stopPropagation();wbCartAdd('${p.code}')">+</button>`
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function wbSetCat(cat) { wbCatFilter = cat; renderWbSidebar(); }
+
+function wbCartAdd(code) {
+  const p = PRODUCTS.find(x => x.code === code);
+  if (!p || !p.ctn_wb) return;
+  wbCart[code] = (wbCart[code] || 0) + p.ctn_wb;
+  renderWbSidebar(); renderWbCart();
+}
+
+function wbCartSet(code, qty) {
+  if (qty <= 0) { delete wbCart[code]; }
+  else {
+    const p = PRODUCTS.find(x => x.code === code);
+    if (!p) return;
+    // Snap to nearest multiple of ctn_wb
+    wbCart[code] = Math.max(p.ctn_wb, Math.round(qty / p.ctn_wb) * p.ctn_wb);
+  }
+  renderWbSidebar(); renderWbCart();
+}
+
+function wbBoxStr(qty, ctn_wb) {
+  if (!ctn_wb || ctn_wb <= 0) return '—';
+  const full = Math.floor(qty / ctn_wb);
+  const rem  = qty % ctn_wb;
+  if (full > 0 && rem === 0) return `<span style="color:var(--success);font-weight:700">${full} кор</span>`;
+  if (full > 0 && rem > 0)  return `<span style="color:var(--accent);font-weight:700">${full} кор + ${rem} шт</span>`;
+  return `<span style="color:#FF5000;font-weight:700">неполн. (${rem} из ${ctn_wb})</span>`;
+}
+
+function renderWbCart() {
+  const items = Object.entries(wbCart)
+    .map(([code, qty]) => ({ p: PRODUCTS.find(x => x.code === code), qty }))
+    .filter(x => x.p && x.qty > 0);
+
+  const tableEl = document.getElementById('wbCartTable');
+  const emptyEl = document.getElementById('wbCartEmpty');
+  tableEl.style.display = items.length ? '' : 'none';
+  emptyEl.style.display = items.length ? 'none' : '';
+
+  const totQty   = items.reduce((s,x) => s + x.qty, 0);
+  const totBoxes = items.reduce((s,x) => s + (x.p.ctn_wb ? Math.floor(x.qty / x.p.ctn_wb) : 0), 0);
+  document.getElementById('wbTPos').textContent   = items.length;
+  document.getElementById('wbTQty').textContent   = totQty;
+  document.getElementById('wbTBoxes').textContent = totBoxes;
+
+  document.getElementById('wbCartBody').innerHTML = items.map((x, idx) => {
+    const full = x.p.ctn_wb ? Math.floor(x.qty / x.p.ctn_wb) : 0;
+    const rem  = x.p.ctn_wb ? x.qty % x.p.ctn_wb : x.qty;
+    const rowBg = rem > 0 && full === 0 ? 'background:rgba(255,80,0,0.06)'
+                : rem > 0               ? 'background:rgba(255,165,0,0.05)' : '';
+    return `<tr style="${rowBg}">
+      <td class="num" style="color:var(--muted)">${idx+1}</td>
+      <td><div class="pname">${x.p.name}</div></td>
+      <td style="text-align:center;font-size:11px">${x.p.wb_article
+        ? '<a href="'+x.p.wb_link+'" target="_blank" style="color:#a78bfa;text-decoration:underline;font-family:monospace">'+x.p.wb_article+'</a>'
+        : '<span style="color:var(--muted)">—</span>'}</td>
+      <td style="text-align:center">
+        <div style="display:flex;align-items:center;gap:4px;justify-content:center">
+          <button class="qty-btn" onclick="wbCartSet('${x.p.code}',${x.qty - x.p.ctn_wb})">−</button>
+          <input type="number" value="${x.qty}" min="${x.p.ctn_wb}" step="${x.p.ctn_wb}"
+            style="width:52px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:2px 4px;font-size:12px;background:var(--surface);color:var(--text)"
+            onchange="wbCartSet('${x.p.code}',parseInt(this.value)||${x.p.ctn_wb})">
+          <button class="qty-btn" onclick="wbCartSet('${x.p.code}',${x.qty + x.p.ctn_wb})">+</button>
+        </div>
+      </td>
+      <td style="text-align:center;color:#a78bfa;font-weight:600">${x.p.ctn_wb}</td>
+      <td style="text-align:center">${wbBoxStr(x.qty, x.p.ctn_wb)}</td>
+      <td><button class="btn-del-row" onclick="wbCartSet('${x.p.code}',0)">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ===== WB: IMPORT FILE =====
+function wbImportFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  event.target.value = '';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const buf = e.target.result;
+      const wb = XLSX.read(buf, { type: 'array', codepage: 1251 });
+
+      // Build cellMap from SheetJS (all sheets)
+      const cellMap = {};
+      wb.SheetNames.forEach(sn => {
+        Object.keys(wb.Sheets[sn]).forEach(addr => {
+          if (addr.startsWith('!')) return;
+          try {
+            const cell = XLSX.utils.decode_cell(addr);
+            const val = wb.Sheets[sn][addr].v !== undefined ? wb.Sheets[sn][addr].v : '';
+            if (!cellMap[cell.r]) cellMap[cell.r] = {};
+            if (val !== '') cellMap[cell.r][cell.c] = val;
+          } catch(ex) {}
+        });
+      });
+
+      // Byte scan for NUMBER records after EOF (1C extension)
+      const bytes = new Uint8Array(buf);
+      const view = new DataView(buf);
+      for (let i = 0; i < bytes.length - 18; i++) {
+        if (bytes[i]===0x03&&bytes[i+1]===0x02&&bytes[i+2]===0x0e&&bytes[i+3]===0x00) {
+          const row=bytes[i+4]+(bytes[i+5]<<8), col=bytes[i+6]+(bytes[i+7]<<8);
+          const val=view.getFloat64(i+10,true);
+          if (row<500&&col<100&&val>0&&val<1e9&&isFinite(val)) {
+            if (!cellMap[row]) cellMap[row]={};
+            cellMap[row][col]=val;
+          }
+        }
+      }
+
+      // Find header row with "Товары" and "Кол-во"
+      let nameCol=-1, qtyCol=-1, headerRow=-1;
+      const sortedKeys = Object.keys(cellMap).map(Number).sort((a,b)=>a-b);
+      for (const ri of sortedKeys.slice(0, 15)) {
+        for (const [ci, val] of Object.entries(cellMap[ri]||{})) {
+          const v = String(val).trim();
+          if (v.includes('Товары')) { nameCol=parseInt(ci); headerRow=ri; }
+          if (v==='Кол-во') qtyCol=parseInt(ci);
+        }
+        if (nameCol>=0&&qtyCol>=0) break;
+      }
+
+      if (nameCol<0||qtyCol<0) { alert('Не распознан формат файла'); return; }
+
+      wbCart = {};
+      const maxRow = Math.max(...sortedKeys);
+      let notFound = [];
+      for (let ri=headerRow+1; ri<=maxRow; ri++) {
+        const name = String((cellMap[ri]||{})[nameCol]||'').trim();
+        const qty = Math.round(parseFloat(String((cellMap[ri]||{})[qtyCol]||'').replace(',','.')))||0;
+        if (!name||!qty||name.length<5) continue;
+        if (!name.match(/[а-яА-Яa-zA-Z]/)) continue;
+        const { product, score } = findProductByName(name);
+        if (product && product.ctn_wb && score >= 0.4) {
+          wbCart[product.code] = (wbCart[product.code]||0) + qty;
+        } else {
+          notFound.push(name.slice(0,50));
+        }
+      }
+      renderWbSidebar(); renderWbCart();
+      let msg = 'Загружено: ' + Object.keys(wbCart).length + ' позиций';
+      if (notFound.length) msg += '\n\nНе найдено в ВБ каталоге (' + notFound.length + '):\n' + notFound.slice(0,5).join('\n');
+      alert(msg);
+    } catch(err) { alert('Ошибка: '+err.message); console.error(err); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ===== WB: CLEAR ORDER =====
+function clearWbOrder() {
+  if (Object.keys(wbCart).length && !confirm('Очистить ВБ заказ?')) return;
+  wbCart = {};
+  renderWbSidebar();
+  renderWbCart();
+}
+
+// Shared helper: parse one text line into {rawName, qty}
+function parseImportText(line) {
+  line = line.trim();
+  if (!line) return { rawName: null, qty: 0 };
+  // Format: "Name - qty" or "qty Name" or "Name qty"
+  const sep = line.match(/^(.+?)\s+[-–—]\s+(\d+)\s*(шт\.?)?$/i);
+  if (sep) return { rawName: sep[1].trim(), qty: parseInt(sep[2]) };
+  const end = line.replace(/шт\.?/gi,'').trim().match(/^(.*?)\s+(\d+)\s*$/);
+  if (end) return { rawName: end[1].trim(), qty: parseInt(end[2]) };
+  const start = line.match(/^(\d+)\s+(.+)$/);
+  if (start) return { rawName: start[2].trim(), qty: parseInt(start[1]) };
+  return { rawName: line, qty: 0 };
+}
+
+// ===== WB: PASTE LIST =====
+function openWbPasteModal() {
+  document.getElementById('wbPasteModalOverlay').classList.add('open');
+  document.getElementById('wbPasteText').focus();
+}
+function closeWbPasteModal() {
+  document.getElementById('wbPasteModalOverlay').classList.remove('open');
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('wbPasteModalOverlay')?.addEventListener('click', e => {
+    if (e.target === document.getElementById('wbPasteModalOverlay')) closeWbPasteModal();
+  });
+});
+function processWbPasteList() {
+  const text = document.getElementById('wbPasteText').value.trim();
+  if (!text) return;
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  let added = 0, notFound = [];
+  for (const line of lines) {
+    const { rawName, qty } = parseImportText(line);
+    if (!rawName || !qty) continue;
+    const { product } = findProductByName(rawName);
+    if (product && product.ctn_wb) {
+      wbCart[product.code] = (wbCart[product.code] || 0) + qty;
+      added++;
+    } else if (product && !product.ctn_wb) {
+      notFound.push(rawName + ' (нет ВБ коробки)');
+    } else {
+      notFound.push(rawName);
+    }
+  }
+  closeWbPasteModal();
+  renderWbSidebar(); renderWbCart();
+  let msg = `Добавлено: ${added} позиций`;
+  if (notFound.length) msg += `\n\nНе найдено (${notFound.length}):\n` + notFound.slice(0,5).join('\n');
+  alert(msg);
+}
+
+// ===== WB: SAVE TO HISTORY =====
+function saveWbToHistory() {
+  const items = Object.entries(wbCart)
+    .map(([code, qty]) => ({ p: PRODUCTS.find(x => x.code === code), qty }))
+    .filter(x => x.p && x.qty > 0);
+  if (!items.length) { alert('Заказ ВБ пуст'); return; }
+
+  const client = prompt('Название заказа ВБ (клиент / назначение):', 'ВБ Заказ');
+  if (client === null) return;
+  const date = new Date().toISOString().split('T')[0];
+  const totQty   = items.reduce((s,x) => s + x.qty, 0);
+  const totBoxes = items.reduce((s,x) => s + (x.p.ctn_wb ? Math.floor(x.qty / x.p.ctn_wb) : 0), 0);
+
+  const record = {
+    id: Date.now(),
+    savedAt: new Date().toISOString(),
+    client: client || 'ВБ Заказ',
+    country: 'Wildberries',
+    date,
+    totQty, totWeight: 0, totCBM: 0, totBoxes,
+    isWB: true,
+    items: items.map(x => ({
+      product: { name: x.p.name, code: x.p.code, weight: 0, cbm: 0, dims: '' },
+      qty: x.qty, ctn: x.p.ctn_wb, ctn_wb: x.p.ctn_wb
+    }))
+  };
+  const hist = getHistory();
+  hist.unshift(record);
+  saveHistory(hist);
+  alert(`✅ Заказ ВБ "${record.client}" сохранён в историю!`);
+}
+
+// ===== WB: PDF =====
+function exportWbPDF() {
+  const items = Object.entries(wbCart)
+    .map(([code, qty]) => ({ p: PRODUCTS.find(x => x.code === code), qty }))
+    .filter(x => x.p && x.qty > 0);
+  if (!items.length) { alert('Заказ ВБ пуст'); return; }
+
+  const date = new Date().toLocaleDateString('ru');
+  const totQty   = items.reduce((s,x) => s + x.qty, 0);
+  const totBoxes = items.reduce((s,x) => s + (x.p.ctn_wb ? Math.floor(x.qty / x.p.ctn_wb) : 0), 0);
+
+  const rows = items.map((x, idx) => {
+    const full = x.p.ctn_wb ? Math.floor(x.qty / x.p.ctn_wb) : 0;
+    const rem  = x.p.ctn_wb ? x.qty % x.p.ctn_wb : x.qty;
+    let boxStr, boxColor;
+    if (full > 0 && rem === 0) { boxStr = full + ' кор'; boxColor = '#16a34a'; }
+    else if (full > 0)         { boxStr = full + ' кор + ' + rem + ' шт'; boxColor = '#d97706'; }
+    else                       { boxStr = 'неполн. (' + rem + ' из ' + x.p.ctn_wb + ')'; boxColor = '#dc2626'; }
+    const artCell = x.p.wb_article
+      ? `<a href="${x.p.wb_link}" style="color:#7c3aed;font-family:monospace;font-size:10px">${x.p.wb_article}</a>`
+      : '—';
+    return `<tr style="background:${idx%2===0?'#fff':'#f8f8f8'}">
+      <td style="padding:5px 8px;text-align:center;color:#666">${idx+1}</td>
+      <td style="padding:5px 8px">${x.p.name}</td>
+      <td style="padding:5px 8px;text-align:center">${artCell}</td>
+      <td style="padding:5px 8px;text-align:center;font-weight:600">${x.qty}</td>
+      <td style="padding:5px 8px;text-align:center;color:#7c3aed;font-weight:600">${x.p.ctn_wb}</td>
+      <td style="padding:5px 8px;text-align:center;color:${boxColor};font-weight:700">${boxStr}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    @page{margin:12mm;size:A4}*{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,sans-serif;font-size:11px;color:#111;background:#fff}
+    .hdr{background:#1C1C1E;color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .hdr-brand{font-size:18px;font-weight:900;letter-spacing:2px}
+    .hdr-sub{font-size:11px;color:#a78bfa;font-weight:600}
+    .summary{display:flex;gap:12px;margin-bottom:12px}
+    .card{flex:1;background:#f3f4f6;border-radius:6px;padding:8px 12px;border-left:3px solid #7c3aed}
+    .card-lbl{font-size:8px;text-transform:uppercase;color:#666;letter-spacing:.7px}
+    .card-val{font-size:18px;font-weight:800;color:#1C1C1E}
+    table{width:100%;border-collapse:collapse}
+    thead th{background:#1C1C1E;color:#fff;padding:7px 8px;font-size:9px;text-transform:uppercase;text-align:left}
+    tfoot td{background:#1C1C1E;color:#fff;padding:7px 8px;font-weight:700}
+    td{border-bottom:1px solid #eee}a{color:#7c3aed}
+  </style></head><body>
+  <div class="hdr">
+    <div><div class="hdr-brand">AMP</div><div class="hdr-sub">Заказ Wildberries</div></div>
+    <div style="text-align:right;font-size:10px;color:#aaa">${date}</div>
+  </div>
+  <div class="summary">
+    <div class="card"><div class="card-lbl">Позиций</div><div class="card-val">${items.length}</div></div>
+    <div class="card"><div class="card-lbl">Штук всего</div><div class="card-val">${totQty}</div></div>
+    <div class="card"><div class="card-lbl">Полных коробок</div><div class="card-val">${totBoxes}</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th style="width:24px">#</th><th>Наименование</th>
+      <th style="width:90px;text-align:center">Артикул ВБ</th>
+      <th style="width:58px;text-align:center">Кол-во</th>
+      <th style="width:52px;text-align:center">ВБ кор.</th>
+      <th style="width:110px;text-align:center">Коробок</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr>
+      <td colspan="3" style="padding:7px 8px">ИТОГО</td>
+      <td style="text-align:center;padding:7px 8px">${totQty}</td>
+      <td></td>
+      <td style="text-align:center;padding:7px 8px">${totBoxes} полн. кор</td>
+    </tr></tfoot>
+  </table></body></html>`;
+
+  if (typeof html2pdf !== 'undefined') {
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    const bodyContent = bodyMatch ? bodyMatch[1] : html;
+    const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    const styles = styleMatch ? styleMatch[1] : '';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:absolute;left:0;top:0;width:210mm;z-index:-1;opacity:0;pointer-events:none;background:#fff;font-family:Arial,sans-serif;font-size:11px;color:#111';
+    const styleEl = document.createElement('style');
+    styleEl.textContent = styles;
+    wrapper.appendChild(styleEl);
+    const contentEl = document.createElement('div');
+    contentEl.innerHTML = bodyContent;
+    wrapper.appendChild(contentEl);
+    document.body.appendChild(wrapper);
+
+    html2pdf().set({
+      margin: 10,
+      filename: 'AMP_ВБ_Заказ_' + date.replace(/\./g,'-') + '.pdf',
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', logging: false },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    }).from(contentEl).save().then(() => document.body.removeChild(wrapper));
+  } else {
+    const w = window.open('', '_blank');
+    if (!w) { alert('Разрешите всплывающие окна'); return; }
+    w.document.write(html); w.document.close();
+    setTimeout(() => w.print(), 500);
+  }
+}
+
+function exportWbXLSX() {
+  const items = Object.entries(wbCart)
+    .map(([code, qty]) => ({ p: PRODUCTS.find(x => x.code === code), qty }))
+    .filter(x => x.p && x.qty > 0);
+  if (!items.length) { alert('Заказ ВБ пуст'); return; }
+
+  const date = new Date().toLocaleDateString('ru');
+  const wb2 = XLSX.utils.book_new();
+
+  // ── helpers ──
+  const border = {
+    top:    {style:'thin', color:{rgb:'CCCCCC'}},
+    bottom: {style:'thin', color:{rgb:'CCCCCC'}},
+    left:   {style:'thin', color:{rgb:'CCCCCC'}},
+    right:  {style:'thin', color:{rgb:'CCCCCC'}},
+  };
+  const borderBold = {
+    top:    {style:'medium', color:{rgb:'333333'}},
+    bottom: {style:'medium', color:{rgb:'333333'}},
+    left:   {style:'medium', color:{rgb:'333333'}},
+    right:  {style:'medium', color:{rgb:'333333'}},
+  };
+
+  const cell = (v, opts={}) => Object.assign({ v, t: typeof v==='number'?'n':'s' }, opts);
+
+  // ── data ──
+  const totalQty   = items.reduce((s,x)=>s+x.qty, 0);
+  const totalBoxes = items.reduce((s,x)=>s+Math.floor(x.qty/x.p.ctn_wb), 0);
+
+  // Build aoa for sheet_to_json
+  const aoa = [
+    ['Заказ Wildberries — AMP Car Audio','','','','','',''],
+    ['Дата: '+date,'','','','','',''],
+    [],
+    ['№','Наименование','Артикул ВБ','Ссылка на WB','Кол-во, шт','ВБ кор.','Мастер-коробок'],
+    ...items.map((x,idx) => {
+      const full = Math.floor(x.qty/x.p.ctn_wb);
+      const rem  = x.qty % x.p.ctn_wb;
+      const boxStr = full>0 && rem===0 ? full+' кор'
+                   : full>0 ? full+' кор + '+rem+' шт'
+                   : 'неполн. ('+rem+' из '+x.p.ctn_wb+')';
+      return [idx+1, x.p.name, x.p.wb_article||'', x.p.wb_link||'', x.qty, x.p.ctn_wb, boxStr];
+    }),
+    [],
+    ['ИТОГО','','','',totalQty,'',totalBoxes+' полн. кор'],
+  ];
+
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa);
+
+  // ── column widths ──
+  ws2['!cols'] = [{wch:4},{wch:52},{wch:13},{wch:50},{wch:12},{wch:9},{wch:18}];
+
+  // ── merges for title rows ──
+  ws2['!merges'] = [
+    {s:{r:0,c:0},e:{r:0,c:6}},
+    {s:{r:1,c:0},e:{r:1,c:6}},
+  ];
+
+  // ── apply styles ──
+  const enc = XLSX.utils.encode_cell;
+  const numRows = aoa.length;
+
+  // Title row 1
+  const t1 = enc({r:0,c:0});
+  ws2[t1] = { v:'Заказ Wildberries — AMP Car Audio', t:'s',
+    s:{ font:{bold:true,sz:14,color:{rgb:'FFFFFF'}},
+        fill:{fgColor:{rgb:'1C1C1E'}}, alignment:{horizontal:'center'},
+        border:borderBold }};
+
+  // Title row 2
+  const t2 = enc({r:1,c:0});
+  ws2[t2] = { v:'Дата: '+date, t:'s',
+    s:{ font:{bold:false,sz:11,color:{rgb:'AAAAAA'}},
+        fill:{fgColor:{rgb:'1C1C1E'}}, alignment:{horizontal:'left'},
+        border:borderBold }};
+
+  // Header row (row index 3)
+  const headers = ['№','Наименование','Артикул ВБ','Ссылка на WB','Кол-во, шт','ВБ кор.','Мастер-коробок'];
+  headers.forEach((h,ci) => {
+    const addr = enc({r:3,c:ci});
+    ws2[addr] = { v:h, t:'s',
+      s:{ font:{bold:true,sz:10,color:{rgb:'FFFFFF'}},
+          fill:{fgColor:{rgb:'2D2D3A'}},
+          alignment:{horizontal:'center',wrapText:true},
+          border:borderBold }};
+  });
+
+  // Data rows
+  items.forEach((x,idx) => {
+    const r = 4 + idx;
+    const full = Math.floor(x.qty/x.p.ctn_wb);
+    const rem  = x.qty % x.p.ctn_wb;
+    const boxColor = full>0&&rem===0 ? '16a34a' : full>0 ? 'd97706' : 'dc2626';
+    const boxStr = full>0&&rem===0 ? full+' кор'
+                 : full>0 ? full+' кор + '+rem+' шт'
+                 : 'неполн. ('+rem+' из '+x.p.ctn_wb+')';
+    const bg = idx%2===0 ? 'FFFFFF' : 'F7F7FA';
+
+    const rowData = [
+      {v:idx+1,         t:'n', s:{font:{sz:10},fill:{fgColor:{rgb:bg}},alignment:{horizontal:'center'},border}},
+      {v:x.p.name,      t:'s', s:{font:{sz:10},fill:{fgColor:{rgb:bg}},alignment:{wrapText:false},border}},
+      {v:x.p.wb_article||'', t:'s', s:{font:{sz:10,color:{rgb:'7C3AED'},bold:!!x.p.wb_article},fill:{fgColor:{rgb:bg}},alignment:{horizontal:'center'},border}},
+      {v:x.p.wb_link||'',    t:'s', s:{font:{sz:9,color:{rgb:'0563C1'},underline:!!x.p.wb_link},fill:{fgColor:{rgb:bg}},alignment:{horizontal:'left'},border}},
+      {v:x.qty,         t:'n', s:{font:{sz:10,bold:true},fill:{fgColor:{rgb:bg}},alignment:{horizontal:'center'},border}},
+      {v:x.p.ctn_wb,   t:'n', s:{font:{sz:10,color:{rgb:'7C3AED'}},fill:{fgColor:{rgb:bg}},alignment:{horizontal:'center'},border}},
+      {v:boxStr,        t:'s', s:{font:{sz:10,bold:true,color:{rgb:boxColor}},fill:{fgColor:{rgb:bg}},alignment:{horizontal:'center'},border}},
+    ];
+    rowData.forEach((cellData, ci) => {
+      ws2[enc({r,c:ci})] = cellData;
+    });
+
+    // Hyperlink on article cell
+    if (x.p.wb_link) {
+      ws2[enc({r,c:2})].l = {Target: x.p.wb_link};
+      ws2[enc({r,c:3})].l = {Target: x.p.wb_link};
+    }
+  });
+
+  // Totals row
+  const totRow = 4 + items.length + 1;
+  const totData = [
+    {v:'ИТОГО', t:'s', s:{font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'1C1C1E'}},alignment:{horizontal:'left'},border:borderBold}},
+    {v:'',      t:'s', s:{fill:{fgColor:{rgb:'1C1C1E'}},border:borderBold}},
+    {v:'',      t:'s', s:{fill:{fgColor:{rgb:'1C1C1E'}},border:borderBold}},
+    {v:'',      t:'s', s:{fill:{fgColor:{rgb:'1C1C1E'}},border:borderBold}},
+    {v:totalQty,t:'n', s:{font:{bold:true,sz:11,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'1C1C1E'}},alignment:{horizontal:'center'},border:borderBold}},
+    {v:'',      t:'s', s:{fill:{fgColor:{rgb:'1C1C1E'}},border:borderBold}},
+    {v:totalBoxes+' полн. кор', t:'s', s:{font:{bold:true,sz:11,color:{rgb:'A78BFA'}},fill:{fgColor:{rgb:'1C1C1E'}},alignment:{horizontal:'center'},border:borderBold}},
+  ];
+  totData.forEach((cellData, ci) => {
+    ws2[enc({r:totRow,c:ci})] = cellData;
+  });
+
+  XLSX.utils.book_append_sheet(wb2, ws2, 'ВБ Заказ');
+  XLSX.writeFile(wb2, 'AMP_ВБ_Заказ_'+date.replace(/\./g,'-')+'.xlsx', {bookSST:false, cellStyles:true});
+}
+
+// ===== ADD PRODUCT (LOCAL) =====
+function openAddProductForm() {
+  const f = document.getElementById('addProductForm');
+  f.style.display = f.style.display === 'none' ? '' : 'none';
+  if (f.style.display !== 'none') document.getElementById('apCode').focus();
+}
+
+function addProductLocal() {
+  const code = document.getElementById('apCode').value.trim();
+  const name = document.getElementById('apName').value.trim();
+  const err = document.getElementById('apError');
+  if (!code || !name) { err.textContent = 'Код и наименование обязательны'; return; }
+  if (PRODUCTS.find(p => p.code === code)) { err.textContent = 'Товар с таким кодом уже есть'; return; }
+  const ctn = parseInt(document.getElementById('apCtn').value) || null;
+  const ctn_wb = parseInt(document.getElementById('apCtnWb').value) || null;
+  const weight = parseFloat(document.getElementById('apWeight').value.replace(',','.')) || null;
+  const dims = document.getElementById('apDims').value.trim() || null;
+  let cbm = null;
+  if (dims) {
+    const parts = dims.replace(/\s/g,'').split('х').map(v=>parseFloat(v.replace(',','.')));
+    if (parts.length===3&&parts.every(v=>!isNaN(v))) cbm = +(parts[0]*parts[1]*parts[2]/1000000).toFixed(6);
+  }
+  const newProd = { name, code, dims: dims||'', weight: weight||0, ctn: ctn||null, cbm: cbm||0, ctn_wb };
+  PRODUCTS.push(newProd);
+  // Clear form
+  ['apCode','apName','apCtn','apCtnWb','apWeight','apDims'].forEach(id => document.getElementById(id).value='');
+  err.textContent = '';
+  renderCatalogTable();
+  renderProductList();
+  alert('✅ Товар добавлен: ' + name + '\n\nВнимание: товар сохранён только в текущей сессии. Чтобы он остался навсегда — обратитесь к разработчику для добавления в PRODUCTS_RAW.');
 }
 
 // ===== INIT =====
@@ -1446,6 +2104,13 @@ function renderCatalogTable() {
           style="font-size:11px;color:#7ab3e0"
         >${escHtml(p.dims)}</span>
       </td>
+      <td style="text-align:center" title="Мастер-коробка для Wildberries">
+        <span class="editable" contenteditable="true"
+          onblur="saveCatEdit('${p.code}','ctn_wb',this.textContent)"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur()}"
+          style="min-width:32px;display:inline-block;text-align:center;font-weight:${p.ctn_wb?'600':'400'};color:${p.ctn_wb?'#a78bfa':'var(--muted)'}"
+        >${p.ctn_wb || ''}</span>
+      </td>
       <td style="text-align:center">
         <label class="vis-toggle" title="${isHidden ? 'Скрыт из каталога' : 'Виден в каталоге'}">
           <input type="checkbox" ${isHidden ? '' : 'checked'} onchange="toggleProductVisibility('${p.code}')">
@@ -1632,16 +2297,69 @@ function smartImport(event) {
   const reader = new FileReader();
   reader.onload = e => {
     try {
-      const wb = XLSX.read(e.target.result, { type: 'array' });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      smartImportProcess(rows);
-    } catch(err) { alert('Ошибка чтения файла: ' + err.message); }
+      const buf = e.target.result;
+      const wb = XLSX.read(buf, { type: 'array', codepage: 1251 });
+      const codeRe = /^[ВМBMвм][0-9]{8,}/i;
+
+      // Build cellMap from ALL sheets via SheetJS
+      const cellMap = {};
+      for (const sheetName of wb.SheetNames) {
+        const ws = wb.Sheets[sheetName];
+        Object.keys(ws).forEach(addr => {
+          if (addr.startsWith('!')) return;
+          try {
+            const cell = XLSX.utils.decode_cell(addr);
+            const val = ws[addr].v !== undefined ? ws[addr].v : (ws[addr].w || '');
+            if (!cellMap[cell.r]) cellMap[cell.r] = {};
+            // Don't overwrite good numeric values with empty
+            if (val !== '' && val !== undefined) cellMap[cell.r][cell.c] = val;
+          } catch(ex) {}
+        });
+      }
+
+      // CRITICAL: Also scan raw bytes for NUMBER records (0x0203) 
+      // that 1C writes AFTER the EOF record - SheetJS stops at EOF but 1C puts
+      // numeric data (qty, price, sum) in a hidden section after EOF
+      const bytes = new Uint8Array(buf);
+      const view = new DataView(buf);
+      for (let i = 0; i < bytes.length - 18; i++) {
+        // NUMBER record: type=0x0203 (bytes: 03 02), len=14 (bytes: 0e 00)
+        if (bytes[i] === 0x03 && bytes[i+1] === 0x02 && bytes[i+2] === 0x0e && bytes[i+3] === 0x00) {
+          const row = bytes[i+4] + (bytes[i+5] << 8);
+          const col = bytes[i+6] + (bytes[i+7] << 8);
+          const val = view.getFloat64(i+10, true); // little-endian double
+          if (row < 500 && col < 100 && val > 0 && val < 1e9 && isFinite(val)) {
+            if (!cellMap[row]) cellMap[row] = {};
+            cellMap[row][col] = val;
+          }
+        }
+        // RK record: type=0x027E (bytes: 7e 02), len=10 (bytes: 0a 00)
+        if (bytes[i] === 0x7e && bytes[i+1] === 0x02 && bytes[i+2] === 0x0a && bytes[i+3] === 0x00) {
+          const row = bytes[i+4] + (bytes[i+5] << 8);
+          const col = bytes[i+6] + (bytes[i+7] << 8);
+          const rk = view.getUint32(i+10, true);
+          let val;
+          if (rk & 2) { val = (rk >> 2) / (rk & 1 ? 100 : 1); }
+          else {
+            const tmp = new ArrayBuffer(8);
+            new DataView(tmp).setUint32(4, rk & 0xFFFFFFFC, true);
+            val = new DataView(tmp).getFloat64(0, true) / (rk & 1 ? 100 : 1);
+          }
+          if (row < 500 && col < 100 && val > 0 && val < 1e9 && isFinite(val)) {
+            if (!cellMap[row]) cellMap[row] = {};
+            if (cellMap[row][col] === undefined) cellMap[row][col] = val;
+          }
+        }
+      }
+
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+      process1CRows(rows, cellMap);
+    } catch(err) { alert('Ошибка чтения файла: ' + err.message); console.error(err); }
   };
   reader.readAsArrayBuffer(file);
 }
 
-function smartImportProcess(rows) {
+function smartImportProcess(rows, cellMap) {
   if (!rows.length) { alert('Файл пустой'); return; }
 
   const codeRe = /^[ВМBMвм][0-9]{8,}/i;
@@ -1724,10 +2442,20 @@ function import1C(event) {
   event.target.value = '';
   const reader = new FileReader();
   reader.onload = e => {
-    const wb = XLSX.read(e.target.result, { type: 'array' });
+    const wb = XLSX.read(e.target.result, { type: 'array', codepage: 1251 });
     const ws = wb.Sheets[wb.SheetNames[0]];
+    const cellMap = {};
+    Object.keys(ws).forEach(addr => {
+      if (addr.startsWith('!')) return;
+      try {
+        const cell = XLSX.utils.decode_cell(addr);
+        const val = ws[addr].v !== undefined ? ws[addr].v : (ws[addr].w || '');
+        if (!cellMap[cell.r]) cellMap[cell.r] = {};
+        cellMap[cell.r][cell.c] = val;
+      } catch(e) {}
+    });
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-    process1CRows(rows);
+    process1CRows(rows, cellMap);
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1736,11 +2464,11 @@ function import1C(event) {
 function normStr(s) {
   return String(s || '')
     .toLowerCase()
-    .replace(/\([\d]+\)/g, '')       // remove (6), (10), etc — pack qty in brackets
-    .replace(/\s+v\.?\s*\d+/g, ' ')  // remove ver.2 / v2 / v 3
-    .replace(/ver\.\d+/g, '')
+    .replace(/\([\d]+\)/g, '')        // remove (6), (10), etc — pack qty in brackets
+    .replace(/ver\.?\s*(\d+)/g, 'v$1') // normalize ver.2 / ver2 → v2
+    .replace(/\s+v\.?\s*(\d+)/g, ' v$1') // normalize " v 2" → " v2" — KEEP version
     .replace(/[().,]/g, ' ')
-    .replace(/-/g, '')               // remove ALL dashes for matching (HRCA-5 → HRCA5)
+    .replace(/-/g, '')                // remove dashes (HRCA-5 → HRCA5)
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -1753,7 +2481,6 @@ function matchScore(a, b) {
   const wb = b.split(' ').filter(w => w.length >= 1);
   if (!wa.size || !wb.length) return 0;
   const shared = wb.filter(w => wa.has(w)).length;
-  // Boost score if all input words are found in catalog (input is subset of catalog name)
   const inputWords = a.split(' ').filter(w => w.length >= 1);
   const allInputFound = inputWords.every(w => wb.includes(w));
   if (allInputFound && inputWords.length >= 2) return 0.85;
@@ -1762,13 +2489,34 @@ function matchScore(a, b) {
 
 function findProductByName(rawName) {
   const norm = normStr(rawName);
+
+  // Extract version tag from input (v2, v3, ver2 etc)
+  const verMatch = norm.match(/\bv(\d+)\b/);
+  const inputVer = verMatch ? verMatch[1] : null;
+
   let best = null, bestScore = 0;
   for (const p of PRODUCTS) {
-    const s = matchScore(norm, normStr(p.name));
+    const pNorm = normStr(p.name);
+    let s = matchScore(norm, pNorm);
+
+    // If input has a version tag, penalise products with a DIFFERENT version
+    if (inputVer !== null && s >= 0.45) {
+      const pVerMatch = pNorm.match(/\bv(\d+)\b/);
+      const pVer = pVerMatch ? pVerMatch[1] : null;
+      if (pVer !== null && pVer !== inputVer) {
+        s *= 0.5; // heavy penalty for wrong version
+      }
+      // Bonus if versions match
+      if (pVer !== null && pVer === inputVer) {
+        s = Math.min(1, s * 1.1);
+      }
+    }
+
     if (s > bestScore) { bestScore = s; best = p; }
   }
   if (bestScore >= 0.45) return { product: best, score: bestScore };
-  // Fallback: search by model keyword — find longest word from input (4+ chars) in catalog
+
+  // Fallback: search by model keyword
   const words = norm.split(' ').filter(w => w.length >= 4).sort((a,b) => b.length - a.length);
   for (const w of words) {
     const hit = PRODUCTS.find(p => normStr(p.name).includes(w));
@@ -1777,126 +2525,125 @@ function findProductByName(rawName) {
   return { product: null, score: bestScore };
 }
 
-function process1CRows(rows) {
+function process1CRows(rows, cellMap) {
   if (!rows.length) { alert('Файл пустой'); return; }
-
-  // Detect format:
-  // Format A (1С Согласование): col 1 = row number (digit), col 3 = name, col 34 = qty
-  // Format B (simple): auto-detect name col + qty col
+  cellMap = cellMap || {};
 
   const codeRe = /^[ВМBMвм][0-9]{8,}/i;
 
-  // Check if it's Format A (1С order doc): look for numeric row numbers in col 1
-  // and long text in col 3 starting from row ~7
-  let is1CDoc = false;
-  let nameCol = -1, qtyCol = -1;
-
-  // Try to detect 1C document format: column 1 has sequential numbers 1,2,3...
-  let seqCount = 0;
-  for (const row of rows) {
-    const v = String(row[1] || '').trim();
-    if (/^\d+$/.test(v) && parseInt(v) <= 500) seqCount++;
+  // Helper: get cell value from cellMap (reliable) or rows (fallback)
+  function getCell(ri, ci) {
+    if (cellMap[ri] && cellMap[ri][ci] !== undefined) return cellMap[ri][ci];
+    return rows[ri] ? (rows[ri][ci] !== undefined ? rows[ri][ci] : '') : '';
   }
 
-  if (seqCount >= 3) {
-    // Likely 1C doc format — find which column has the product names
-    // Look for the row where col 1 = "1" and find which col has longest text
-    for (const row of rows) {
-      if (String(row[1] || '').trim() === '1') {
-        // This is the first data row — find name col (longest non-empty string)
-        let maxLen = 0;
-        for (let ci = 2; ci < 10; ci++) {
-          const v = String(row[ci] || '').trim();
-          if (v.length > maxLen && v.length > 10) { maxLen = v.length; nameCol = ci; }
-        }
-        break;
-      }
+  // Strategy 1: find columns by header names "Товары", "Кол-во", "Цена"
+  let nameCol = -1, qtyCol = -1, priceCol = -1, headerRowIdx = -1;
+
+  // Scan cellMap rows for headers (more reliable than rows[] for wide files)
+  const sortedRowKeys = Object.keys(cellMap).map(Number).sort((a,b)=>a-b);
+  for (const ri of sortedRowKeys.slice(0, 15)) {
+    const rowCells = cellMap[ri];
+    for (const [ci, val] of Object.entries(rowCells)) {
+      const v = String(val || '').trim();
+      if (v.includes('Товары') || v === 'Наименование') { nameCol = parseInt(ci); headerRowIdx = ri; }
+      if (v === 'Кол-во') qtyCol = parseInt(ci);
+      if (v === 'Цена') priceCol = parseInt(ci);
     }
-    if (nameCol >= 0) {
-      // Find qty col: scan all data rows, find numeric col that's consistently filled
-      const dataRows = rows.filter(r => /^\d+$/.test(String(r[1] || '').trim()));
-      // Try columns 20..55, pick one with most positive integers
-      let bestQtyCount = 0;
-      for (let ci = 15; ci < Math.min(rows[0].length, 60); ci++) {
-        if (ci === nameCol || ci === nameCol - 1 || ci === nameCol + 1) continue;
-        let cnt = 0;
-        for (const r of dataRows) {
-          const v = String(r[ci] || '').trim();
-          if (v && !isNaN(+v) && +v > 0 && +v < 100000 && Number.isInteger(+v)) cnt++;
-        }
-        if (cnt > bestQtyCount) { bestQtyCount = cnt; qtyCol = ci; }
+    if (nameCol >= 0 && qtyCol >= 0) break;
+  }
+  // Also scan rows[] in case cellMap is empty
+  if ((nameCol < 0 || qtyCol < 0) && rows.length > 0) {
+    for (let ri = 0; ri < Math.min(rows.length, 15); ri++) {
+      for (let ci = 0; ci < rows[ri].length; ci++) {
+        const v = String(rows[ri][ci] || '').trim();
+        if (v.includes('Товары') || v === 'Наименование') { nameCol = ci; headerRowIdx = ri; }
+        if (v === 'Кол-во') qtyCol = ci;
+        if (v === 'Цена') priceCol = ci;
       }
-      is1CDoc = true;
+      if (nameCol >= 0 && qtyCol >= 0) break;
     }
   }
 
-  // Fallback: auto-detect name + qty columns from any format
-  if (!is1CDoc || nameCol < 0 || qtyCol < 0) {
-    // Try to find a code column first
-    for (let ci = 0; ci < Math.min(15, rows[0]?.length || 0); ci++) {
-      for (const row of rows.slice(0, 15)) {
-        if (codeRe.test(String(row[ci] || '').trim())) { nameCol = -2; break; } // signal: use code mode
-      }
-      if (nameCol === -2) break;
+  if (nameCol >= 0 && qtyCol >= 0) {
+    // Header-based format (1С счёт / заказ без размещений)
+    const dataStart = headerRowIdx + 1;
+    _import1cParsed = [];
+    const maxRow = Math.max(...sortedRowKeys, rows.length - 1);
+    for (let ri = dataStart; ri <= maxRow; ri++) {
+      const name = String(getCell(ri, nameCol) || '').trim();
+      const qtyRaw = getCell(ri, qtyCol);
+      const qty = Math.round(parseFloat(String(qtyRaw).replace(',', '.')) || 0);
+      if (!name || !(qty > 0) || name.length < 5) continue;
+      if (!name.match(/[а-яА-Яa-zA-Z]/)) continue;
+      const price = priceCol >= 0 ? parseFloat(String(getCell(ri, priceCol)).replace(',', '.')) || 0 : 0;
+      const { product, score } = findProductByName(name);
+      _import1cParsed.push({ rawName: name, qty, found: product, score, price1c: price });
     }
-
-    if (nameCol === -2) {
-      // Code-based format
-      let codeCol2 = -1, qtyCol2 = -1;
-      for (let ci = 0; ci < Math.min(15, rows[0]?.length || 0); ci++) {
-        for (const row of rows.slice(0, 15)) {
-          if (codeRe.test(String(row[ci] || '').trim())) { codeCol2 = ci; break; }
-        }
-        if (codeCol2 >= 0) break;
-      }
-      for (let ci = 0; ci < Math.min(15, rows[0]?.length || 0); ci++) {
-        if (ci === codeCol2) continue;
-        let cnt = 0;
-        for (const row of rows.slice(0, 15)) {
-          const v = String(row[ci] || '').trim();
-          if (v && !isNaN(+v) && +v > 0) cnt++;
-        }
-        if (cnt >= 1) { qtyCol2 = ci; break; }
-      }
-      const productByCode = {};
-      PRODUCTS.forEach(p => { productByCode[p.code.trim()] = p; });
-      _import1cParsed = [];
-      for (const row of rows) {
-        const code = String(row[codeCol2] || '').trim();
-        if (!codeRe.test(code)) continue;
-        const qty = Math.max(1, Math.round(parseFloat(String(row[qtyCol2] || '').replace(',', '.')) || 1));
-        const p = productByCode[code] || null;
-        _import1cParsed.push({ rawName: code, qty, found: p, score: p ? 1 : 0 });
-      }
-      if (!_import1cParsed.length) { alert('Не удалось распознать структуру файла'); return; }
-      showImport1CPreview();
-      return;
-    }
-
-    // Name-based: find longest text col and a numeric col
-    const sampleRows = rows.slice(1, 10).filter(r => r.some(c => String(c||'').trim().length > 5));
-    for (let ci = 0; ci < Math.min(10, rows[0]?.length || 0); ci++) {
-      let totalLen = 0;
-      for (const r of sampleRows) totalLen += String(r[ci]||'').trim().length;
-      if (totalLen > 50) { nameCol = ci; break; }
-    }
-    for (let ci = 0; ci < Math.min(10, rows[0]?.length || 0); ci++) {
-      if (ci === nameCol) continue;
-      let cnt = 0;
-      for (const r of sampleRows) {
-        const v = String(r[ci]||'').trim();
-        if (v && !isNaN(+v) && +v > 0) cnt++;
-      }
-      if (cnt >= 2) { qtyCol = ci; break; }
-    }
+    if (!_import1cParsed.length) { alert('Не удалось найти товары в файле'); return; }
+    showImport1CPreview();
+    return;
   }
 
-  if (nameCol < 0 || qtyCol < 0) {
+  // Strategy 2: code-based format
+  let codeColFound = -1;
+  const allRowKeys = [...sortedRowKeys, ...Array.from({length: rows.length}, (_,i)=>i)];
+  const uniqueRows = [...new Set(allRowKeys)].sort((a,b)=>a-b);
+  
+  for (let ci = 0; ci < 10; ci++) {
+    for (const ri of uniqueRows.slice(0, 20)) {
+      if (codeRe.test(String(getCell(ri, ci) || '').trim())) { codeColFound = ci; break; }
+    }
+    if (codeColFound >= 0) break;
+  }
+
+  if (codeColFound >= 0) {
+    // Find qty col from cellMap numeric values
+    const dataRowKeys = uniqueRows.filter(ri => codeRe.test(String(getCell(ri, codeColFound) || '').trim()));
+    let qtyCol2 = -1;
+    let best = 0;
+    const maxCols = Math.max(...Object.values(cellMap).flatMap(r => Object.keys(r).map(Number)), 60);
+    for (let ci = 1; ci <= maxCols; ci++) {
+      if (ci === codeColFound) continue;
+      const vals = dataRowKeys.map(ri => parseFloat(String(getCell(ri, ci)||'').replace(',','.'))).filter(v => v > 0 && Number.isInteger(v));
+      const isSeq = vals.length >= 3 && vals.every((v,i) => i===0 || v===vals[i-1]+1);
+      if (!isSeq && vals.length > best) { best = vals.length; qtyCol2 = ci; }
+    }
+    const productByCode = {};
+    PRODUCTS.forEach(p => { productByCode[p.code.trim()] = p; });
+    _import1cParsed = [];
+    for (const ri of uniqueRows) {
+      const code = String(getCell(ri, codeColFound) || '').trim();
+      if (!codeRe.test(code)) continue;
+      const qty = Math.round(parseFloat(String(getCell(ri, qtyCol2 >= 0 ? qtyCol2 : 14) || '').replace(',', '.')) || 1);
+      const p = productByCode[code] || null;
+      _import1cParsed.push({ rawName: code, qty, found: p, score: p ? 1 : 0 });
+    }
+    if (!_import1cParsed.length) { alert('Не удалось распознать структуру файла'); return; }
+    showImport1CPreview();
+    return;
+  }
+
+  // Strategy 3: name-based fallback using rows[]
+  let nameColFb = -1, qtyColFb = -1;
+  const sampleRows = rows.slice(1, 10).filter(r => r.some(c => String(c||'').trim().length > 5));
+  for (let ci = 0; ci < Math.min(10, rows[0]?.length || 0); ci++) {
+    let totalLen = 0;
+    for (const r of sampleRows) totalLen += String(r[ci]||'').trim().length;
+    if (totalLen > 50) { nameColFb = ci; break; }
+  }
+  for (let ci = 0; ci < Math.min(10, rows[0]?.length || 0); ci++) {
+    if (ci === nameColFb) continue;
+    let cnt = 0;
+    for (const r of sampleRows) { const v = String(r[ci]||'').trim(); if (v && !isNaN(+v) && +v > 0) cnt++; }
+    if (cnt >= 2) { qtyColFb = ci; break; }
+  }
+
+  if (nameColFb < 0 || qtyColFb < 0) {
     alert('Не удалось определить структуру файла. Убедитесь что в файле есть колонка с названиями и колонка с количеством.');
     return;
   }
 
-  // Parse data rows
   _import1cParsed = [];
   for (const row of rows) {
     const numCell = String(row[1] || '').trim();
@@ -2060,23 +2807,34 @@ function exportPDF(items, meta) {
   if (rows.length === 0) { alert('Заказ пуст'); return; }
   const m = meta || getOrderData();
   const html = buildPDFHtml(rows, m);
+  const fname = 'AMP_' + (m.client||'заказ').replace(/\s/g,'_') + '_' + (m.date||'').replace(/\./g,'-') + '.pdf';
 
-  // Try html2pdf first (saves directly)
   if (typeof html2pdf !== 'undefined') {
-    const container = document.createElement('div');
-    container.innerHTML = html;
-    const body = container.querySelector('body') || container;
-    const fname = 'AMP_' + (m.client||'заказ').replace(/\s/g,'_') + '_' + (m.date||'').replace(/\./g,'-') + '.pdf';
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    const bodyContent = bodyMatch ? bodyMatch[1] : html;
+    const styleMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+    const styles = styleMatch ? styleMatch[1] : '';
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'position:absolute;left:0;top:0;z-index:-1;opacity:0;pointer-events:none;background:#fff';
+    const styleEl = document.createElement('style');
+    styleEl.textContent = styles;
+    wrapper.appendChild(styleEl);
+    const contentEl = document.createElement('div');
+    contentEl.innerHTML = bodyContent;
+    wrapper.appendChild(contentEl);
+    document.body.appendChild(wrapper);
+
     html2pdf().set({
       margin: 5,
       filename: fname,
       image: { type:'jpeg', quality:0.98 },
-      html2canvas: { scale:2, useCORS:true },
+      html2canvas: { scale:2, useCORS:true, backgroundColor:'#ffffff' },
       jsPDF: { unit:'mm', format:'a4', orientation:'landscape' }
-    }).from(body).save();
+    }).from(contentEl).save().then(() => document.body.removeChild(wrapper));
     return;
   }
-  // Fallback: open in new window for manual save
+  // Fallback
   const win = window.open('','_blank');
   win.document.write(html);
   win.document.close();
@@ -2645,5 +3403,23 @@ function exportStatformXLSX() {
   <button class="bb-btn-close" onclick="dismissBackup()" title="Закрыть">✕</button>
 </div>
 
-</body>
+<!-- MODAL: WB paste list -->
+<div class="modal-overlay" id="wbPasteModalOverlay">
+  <div class="modal" style="width:520px">
+    <h3>📋 Вставить список (ВБ)</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+      Вставьте список товаров и количеств. Формат: одна позиция в строке.<br>
+      Примеры: <code>Усилитель AMP MASS 1.1000 - 12</code> или <code>12 Усилитель AMP MASS 1.1000</code>
+    </p>
+    <textarea id="wbPasteText" rows="12" placeholder="Усилитель AMP MASS 1.1000 (6) - 12&#10;Акустика коаксиальная AMP Beat 653 v2 (8) - 16&#10;..."
+      style="width:100%;font-size:12px;font-family:monospace;border:1px solid var(--border);border-radius:6px;padding:8px;background:var(--surface);color:var(--text);resize:vertical"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="processWbPasteList()">🔍 Разобрать и добавить</button>
+      <button class="btn btn-secondary" onclick="closeWbPasteModal()">Отмена</button>
+    </div>
+  </div>
+</div>
+
+</body>,
+{"name":"Акустика коаксиальная AMP Concert 693 (6)","code":"В0000052445","dims":"29,5 х 14,0 х 36,3","weight":3.35,"ctn":6,"ctn_wb":6,"wb_article":"863426636","wb_link":"https://www.wildberries.ru/catalog/863426636/detail.aspx"}
 </html>
